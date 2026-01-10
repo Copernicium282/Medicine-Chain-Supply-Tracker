@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Batch Verification | MedChain</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Decoupled CSS -->
+    <link rel="stylesheet" href="assets/css/verify.css" />
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <div class="header-title">
+          <a href="index.html" title="Go Home">🏠</a>
+          <h2>Medicine Batch Verification</h2>
+        </div>
+        <button id="theme-toggle" class="btn-icon">🌗</button>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading">🔍 Verifying Blockchain Data...</div>
+
+      <!-- Result Status Box -->
+      <div id="resultContainer" class="status-box"></div>
+
+      <!-- MAP CONTAINER -->
+      <div id="map"></div>
+
+      <!-- Chain Timeline -->
+      <div id="chainContainer" class="chain-container">
+        <!-- Blocks injected here -->
+      </div>
+    </div>
+
+    <!-- Theme Logic -->
+    <script>
+      const toggleBtn = document.getElementById("theme-toggle");
+      const body = document.body;
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light") body.classList.add("light-mode");
+
+      toggleBtn.addEventListener("click", () => {
+        body.classList.toggle("light-mode");
+        const isLight = body.classList.contains("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+      });
+    </script>
+
+    <!-- Firebase & Crypto -->
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Open Location Code (Plus Codes) - Local -->
+    <script src="js/utils/openlocationcode.js"></script>
+    <!-- Shared Location Logic -->
+    <script src="js/utils/location_utils.js"></script>
+    <!-- Local Node Logic -->
+    <script src="js/utils/local-node.js"></script>
+
+    <!-- Shared Verification Logic -->
+    <script src="js/utils/verification-utils.js"></script>
+
+    <!-- Init -->
+    <script src="js/core/firebase-init.js"></script>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const batchId = params.get("batchId");
+      const resultContainer = document.getElementById("resultContainer");
+      const chainContainer = document.getElementById("chainContainer");
+      const loading = document.getElementById("loading");
+
+      if (!batchId) {
+        loading.style.display = "none";
+        resultContainer.className = "status-box error";
+        resultContainer.style.display = "block";
+        resultContainer.innerText = "No Batch ID provided.";
+      } else {
+        verifyBatch(batchId);
+      }
+
+      async function verifyBatch(id, forceLocal = false) {
+        try {
+          chainContainer.innerHTML = ""; // Reset UI
+          loading.style.display = "block";
+          resultContainer.style.display = "none";
+
+          await localNode.init();
+
+          let logs = [];
+          let source = "remote";
+          let snapshot = null;
+
+          // 1. Try Fetch Remote (unless forced local)
+          if (!forceLocal) {
+            try {
+              snapshot = await db
+                .collection("batches")
+                .doc(id)
+                .collection("logs")
+                .orderBy("index")
+                .get();
+            } catch (e) {
+              console.warn("Remote fetch failed/blocked", e);
+            }
+          }
+
+          // 2. Check Remote vs Local
+          if (forceLocal || !snapshot || snapshot.empty) {
+            const cached = await localNode.getBatch(id);
+
+            if (cached && cached.data && cached.data.logs) {
+              logs = cached.data.logs;
+              source = "local";
+
+              // UI Alert
+              const alertBox = document.createElement("div");
+              alertBox.className = "alert-box warning"; // Reusing status-box styles? No created specific alert-box
+              alertBox.style.cssText =
+                "background: rgba(120, 53, 15, 0.2); border: 1px solid #92400e; color: #fbbf24; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; text-align: center;";
+
+              if (forceLocal) {
+                alertBox.innerHTML = `<strong>⚠️ REMOTE CHAIN CORRUPTED</strong><br>Displaying secured Local Node backup.<br><span style="font-size:0.8em; opacity:0.8;">Last Synced: ${new Date(
+                  cached.timestamp
+                ).toLocaleString()}</span>`;
+              } else {
+                alertBox.innerHTML = `<strong>⚠️ NETWORK ALERT</strong><br>Remote Data Unreachable. Using secured Local Node copy.<br><span style="font-size:0.8em; opacity:0.8;">Last Synced: ${new Date(
+                  cached.timestamp
+                ).toLocaleString()}</span>`;
+              }
+              chainContainer.appendChild(alertBox);
+            } else {
+              if (forceLocal)
+                throw new Error("Remote invalid AND Local backup missing.");
+              throw new Error(
+                "Batch not found in logs (Remote) or Local Node."
+              );
+            }
+          } else {
+            snapshot.forEach((doc) => logs.push(doc.data()));
+          }
+
+          let isValid = true;
+          let previousHash = "0";
+
+          loading.style.display = "none";
+          resultContainer.style.display = "block";
+
+          const verifiedBlocks = [];
+
+          logs.forEach((block) => {
+            // 1. Reconstruct Data (Using Shared Utils)
+            const orderedData = reconstructVerificationData(block);
+
+            // 2. Recompute Hash
+            const recomputedHash = CryptoJS.SHA256(
+              block.previousHash + JSON.stringify(orderedData) + block.timestamp
+            ).toString();
+
+            // 3. Validate Integrity
+            const isBlockValid =
+              block.hash === recomputedHash &&
+              block.previousHash === previousHash;
+            if (!isBlockValid) {
+              console.error(`Block #${block.index} Invalid:`, {
+                storedParams: {
+                  prev: block.previousHash,
+                  data: JSON.stringify(orderedData),
+                  ts: block.timestamp,
+                },
+              });
+              isValid = false;
+            }
+
+            // 4. Render Block
+            renderBlock(block, isBlockValid, recomputedHash);
+
+            // Push to array for map
+            if (isBlockValid) verifiedBlocks.push(block);
+
+            // Update for next iteration
+            previousHash = block.hash;
+          });
+
+          // -------------------------------
+          // EXPIRY CHECK (Visual Alert)
+          // -------------------------------
+          const genesis = logs.find((b) => b.eventType === "GENESIS");
+          if (genesis && genesis.data && genesis.data.expiryDate) {
+            const expDate = new Date(genesis.data.expiryDate);
+            let expiredEvent = null;
+
+            logs.forEach((b) => {
+              if (b.index === 0) return; // Skip Genesis
+
+              // Check relevant timestamp (Shipment Departure or Delivery Confirmation)
+              let eventTime = new Date(b.timestamp);
+              if (b.eventType === "SHIPMENT" && b.data.departureTime)
+                eventTime = new Date(b.data.departureTime);
+              if (b.eventType === "DELIVERY_CONFIRMATION" && b.data.confirmedAt)
+                eventTime = new Date(b.data.confirmedAt);
+
+              if (eventTime > expDate) {
+                expiredEvent = b;
+              }
+            });
+
+            if (expiredEvent) {
+              const alertBox = document.createElement("div");
+              alertBox.className = "alert-box expired";
+              alertBox.innerHTML = `⚠️ EXPIRED BATCH ALERT:<br>This batch expired on ${expDate.toLocaleDateString()} but was handled later by ${expiredEvent.role.toUpperCase()} (Block #${
+                expiredEvent.index
+              }).`;
+
+              // Insert at TOP of chain container
+              chainContainer.insertBefore(alertBox, chainContainer.firstChild);
+            }
+          }
+
+          // SYNC TO LOCAL NODE (Only if valid + from remote)
+          if (isValid && source === "remote") {
+            localNode
+              .syncBatch({ id: id, logs: verifiedBlocks })
+              .then(() => console.log("Synced to Local Node"));
+          }
+
+          if (isValid) {
+            const recallBlock = verifiedBlocks.find(
+              (b) => b.eventType === "RECALL"
+            );
+            const returnCompleted = verifiedBlocks.find(
+              (b) => b.eventType === "RETURN_COMPLETED"
+            );
+            const returnInTransit = verifiedBlocks.find(
+              (b) => b.eventType === "RETURN_TRANSIT"
+            );
+
+            if (returnCompleted) {
+              resultContainer.className = "status-box success";
+              resultContainer.innerHTML = `✅ RECALL COMPLETED: Batch successfully returned to factory.<br>Batch ID: ${id}`;
+            } else if (returnInTransit) {
+              resultContainer.className = "status-box warning";
+              resultContainer.innerHTML = `🔄 RECALL IN PROGRESS: Batch is being returned to factory.<br>Batch ID: ${id}`;
+            } else if (recallBlock) {
+              resultContainer.className = "status-box error";
+              resultContainer.innerHTML = `🚨 BATCH BEING RECALLED: Flagged by Admin. Return pending.<br>Batch ID: ${id}`;
+            } else {
+              resultContainer.className = "status-box success";
+              resultContainer.innerHTML = `✅ BATCH VERIFIED: The supply chain record is intact.<br>Batch ID: ${id}`;
+            }
+
+            // 5. Initialize Map if valid
+            initMap(verifiedBlocks);
+          } else {
+            // AUTO FALLBACK
+            if (!forceLocal && source === "remote") {
+              console.warn(
+                "Remote Validation Failed. Attempting Local Fallback..."
+              );
+              await verifyBatch(id, true);
+              return;
+            }
+
+            resultContainer.className = "status-box error";
+            resultContainer.innerHTML = `❌ SECURITY ALERT: Tampering detected in the supply chain record.<br>Batch ID: ${id}`;
+          }
+        } catch (err) {
+          console.error(err);
+          loading.style.display = "none";
+          resultContainer.style.display = "block";
+          resultContainer.className = "status-box error";
+          resultContainer.innerText = "Error: " + err.message;
+        }
+      }
+
+      function renderBlock(block, isValid, recomputed) {
+        const div = document.createElement("div");
+        // Block Card Styling
+        div.className = `block-card ${!isValid ? "invalid" : ""}`;
+
+        // Timeline Dot
+        const dot = document.createElement("div");
+        dot.className = `timeline-dot ${isValid ? "valid" : "invalid"}`;
+
+        // Note: The dot needs to be positioned relative to the card's container or absolute
+        // but the card has marginLeft, so dot needs to be placed correctly.
+        // In CSS I set margins so dot can be placed by absolute within container but that's hard if creating div one by one
+        // Actually, I put the dot INSIDE the card div but then positioned it -left.
+        div.appendChild(dot);
+
+        const date = new Date(block.timestamp).toLocaleString();
+
+        let content = `<div class="block-header">
+                    <div class="block-title">
+                        <h4>Block #${block.index}: ${block.eventType}</h4>
+                        <span class="role-badge">${block.role}</span>
+                    </div>
+                    <div class="block-meta">
+                        <div>${date}</div>
+                        <div style="font-family:monospace;">Creator: ${block.createdBy.substring(
+                          0,
+                          8
+                        )}...</div>
+                    </div>
+                </div>`;
+
+        // Formatted Data based on Type
+        content += `<div class="block-data">`;
+
+        if (block.eventType === "GENESIS") {
+          if (block.data.medicineName)
+            content += `<div class="data-row"><span class="data-label">Medicine:</span> <span class="data-value">${block.data.medicineName}</span></div>`;
+          content += `<div class="data-row block-data-line"><span class="data-label">Factory:</span> <span class="data-value">${
+            block.data.factoryLocation || "N/A"
+          }</span></div>`;
+          content += `<div class="data-row"><span class="data-label">Production:</span> <span class="data-value">${block.data.productionDate}</span></div>`;
+          content += `<div class="data-row"><span class="data-label">Expiry:</span> <span class="data-value">${block.data.expiryDate}</span></div>`;
+          content += `<div class="data-row"><span class="data-label">Quantity:</span> <span class="data-value">${block.data.quantity}</span></div>`;
+          if (block.data.certificateURL)
+            content += `<div style="margin-top:0.5rem;"><a href="${block.data.certificateURL}" target="_blank" class="link-action">📄 View Certificate</a></div>`;
+        } else if (block.eventType === "SHIPMENT") {
+          content += `<div class="data-row"><span class="data-label">From:</span> <span class="data-value">${
+            block.data.sender
+          } (${block.data.originLocation || "N/A"})</span></div>`;
+          content += `<div class="data-row"><span class="data-label">To:</span> <span class="data-value">${
+            block.data.receiver
+          } (${block.data.destLocation || "N/A"})</span></div>`;
+          content += `<div class="data-row"><span class="data-label">Quantity:</span> <span class="data-value">${block.data.quantity}</span></div>`;
+          if (block.data.evidenceURL)
+            content += `<div style="margin-top:0.5rem;"><a href="${block.data.evidenceURL}" target="_blank" class="link-action">📦 View Shipment Evidence</a></div>`;
+        } else if (block.eventType === "DELIVERY_CONFIRMATION") {
+          content += `<div class="data-row"><span class="data-label">Location:</span> <span class="data-value">${
+            block.data.pharmacyLocation || "N/A"
+          }</span></div>`;
+          content += `<div class="data-row"><span class="data-label">Notes:</span> <span class="data-value">${
+            block.data.notes || "None"
+          }</span></div>`;
+          content += `<div class="data-row"><span class="data-label">Confirmed At:</span> <span class="data-value">${block.data.confirmedAt}</span></div>`;
+          if (block.data.proofURL)
+            content += `<div style="margin-top:0.5rem;"><a href="${block.data.proofURL}" target="_blank" class="link-action">✅ View Delivery Proof</a></div>`;
+        } else if (block.eventType === "RECALL") {
+          content += `<div class="alert-box recall" style="margin:0; text-align:left;">`;
+          content += `<strong style="color:#f87171;">⚠️ RECALL ISSUED</strong><br>`;
+          content += `Reason: ${block.data.reason}<br>`;
+          content += `Authorized By: ${block.data.adminUser}`;
+          content += `</div>`;
+        } else if (block.eventType === "RETURN_TRANSIT") {
+          content += `<div class="alert-box warning" style="margin:0; text-align:left;">`;
+          content += `<strong>🔄 RETURN TRANSIT INITIATED</strong><br>`;
+          content += `Notes: ${block.data.notes}<br>`;
+          content += `Confirmed By: ${block.data.confirmedBy}`;
+          content += `</div>`;
+        } else if (block.eventType === "RETURN_COMPLETED") {
+          content += `<div class="alert-box success" style="margin:0; text-align:left;">`;
+          content += `<strong>✅ RETURN RECEIVED AT FACTORY</strong><br>`;
+          content += `Notes: ${block.data.notes}<br>`;
+          content += `Confirmed By: ${block.data.confirmedBy}`;
+          content += `</div>`;
+        }
+        content += `</div>`;
+
+        // Hashes
+        content += `<div class="hash-section">`;
+        content += `<div><strong>Prev Hash:</strong> ${block.previousHash}</div>`;
+        content += `<div><strong>Stored Hash:</strong> <span class="${
+          isValid ? "hash-valid" : "hash-invalid"
+        }">${block.hash}</span></div>`;
+
+        if (!isValid) {
+          content += `<div class="hash-invalid"><strong>Calculated:</strong> ${recomputed} (MISMATCH)</div>`;
+        }
+        content += `</div>`;
+
+        div.innerHTML = content;
+        div.appendChild(dot); // Append dot AFTER innerHTML
+
+        chainContainer.appendChild(div);
+      }
+
+      // ==========================================
+      // MAP VISUALIZATION LOGIC
+      // ==========================================
+      async function initMap(blocks) {
+        const mapContainer = document.getElementById("map");
+
+        const hasLocation = blocks.some(
+          (b) =>
+            (b.eventType === "GENESIS" && b.data.factoryLocation) ||
+            (b.eventType === "SHIPMENT" &&
+              (b.data.originLocation || b.data.destLocation)) ||
+            (b.eventType === "DELIVERY_CONFIRMATION" && b.data.pharmacyLocation)
+        );
+
+        if (!hasLocation) return;
+
+        mapContainer.classList.add("visible");
+
+        // Init Leaflet
+        const map = L.map("map").setView([20, 0], 2);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "© OpenStreetMap",
+        }).addTo(map);
+
+        const latLngs = [];
+
+        // Helper to add marker
+        const addMarker = (lat, lng, popup) => {
+          L.marker([lat, lng]).addTo(map).bindPopup(popup).openPopup();
+          latLngs.push([lat, lng]);
+        };
+
+        // Process Blocks
+        for (const block of blocks) {
+          if (block.eventType === "GENESIS" && block.data.factoryLocation) {
+            const coords = await resolveLocation(block.data.factoryLocation);
+            if (coords)
+              addMarker(
+                coords.lat,
+                coords.lon,
+                "<b>Factory Location</b><br>Origin of Batch"
+              );
+          } else if (block.eventType === "SHIPMENT") {
+            // Origin
+            if (block.data.originLocation) {
+              const originCoords = await resolveLocation(
+                block.data.originLocation
+              );
+              if (originCoords)
+                addMarker(
+                  originCoords.lat,
+                  originCoords.lon,
+                  "<b>Shipment Origin</b><br>" + block.data.sender
+                );
+            }
+            // Dest
+            if (block.data.destLocation) {
+              const destCoords = await resolveLocation(block.data.destLocation);
+              if (destCoords)
+                addMarker(
+                  destCoords.lat,
+                  destCoords.lon,
+                  "<b>Shipment Destination</b><br>" + block.data.receiver
+                );
+            }
+          } else if (
+            block.eventType === "DELIVERY_CONFIRMATION" &&
+            block.data.pharmacyLocation
+          ) {
+            const pharmacyCoords = await resolveLocation(
+              block.data.pharmacyLocation
+            );
+            if (pharmacyCoords)
+              addMarker(
+                pharmacyCoords.lat,
+                pharmacyCoords.lon,
+                "<b>Pharmacy Delivery</b><br>FINAL DESTINATION"
+              );
+          }
+        }
+
+        // Fit bounds if we have points
+        if (latLngs.length > 0) {
+          const bounds = L.latLngBounds(latLngs);
+          map.fitBounds(bounds, { padding: [50, 50] });
+
+          // Draw lines
+          if (latLngs.length > 1) {
+            L.polyline(latLngs, {
+              color: "#0F807B",
+              weight: 3,
+              dashArray: "10, 10",
+            }).addTo(map); // Using brand color for line
+          }
+        }
+      }
+    </script>
+  </body>
+</html>

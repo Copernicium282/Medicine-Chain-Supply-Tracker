@@ -1,0 +1,3 @@
+“Since Firebase Firestore rules cannot authenticate MetaMask users without a backend for custom tokens (which critically requires Node.js),
+role enforcement is implemented client-side for this prototype.
+Data integrity is ensured via append-only logs and cryptographic hash verification, which is the focus of this project."

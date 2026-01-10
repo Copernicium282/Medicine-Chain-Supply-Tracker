@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Manufacturer Dashboard</title>
+    <!-- Raw CSS -->
+    <link rel="stylesheet" href="../assets/css/dashboard-shared.css" />
+    <!-- <link rel="stylesheet" href="../assets/css/manufacturer.css"> -->
+  </head>
+  <body>
+    <!-- Auth blocking overlay -->
+    <div id="auth-blocker" class="overlay">
+      <div class="card text-center" style="max-width: 400px; width: 100%">
+        <div class="spinner"></div>
+        <strong
+          id="redirect-text"
+          style="font-size: 1.25rem; color: var(--color-text-muted)"
+          >Redirecting you…</strong
+        >
+      </div>
+    </div>
+
+    <!-- REAL APP -->
+    <div id="app" class="hidden" style="opacity: 0; transition: opacity 0.5s">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <div class="brand-title">
+          <span style="font-size: 1.5rem">🏭</span>
+          <h1>Manufacturer Dashboard</h1>
+        </div>
+        <div class="nav-controls">
+          <a href="../index.html" class="btn btn-secondary" title="Home">🏠</a>
+          <a href="../analytics.html" class="btn btn-accent" title="Analytics"
+            >📊</a
+          >
+          <button
+            id="theme-toggle"
+            class="btn btn-secondary"
+            title="Toggle Theme"
+          >
+            🌗
+          </button>
+          <button onclick="logout()" class="btn btn-danger">Logout</button>
+        </div>
+      </nav>
+
+      <div class="container">
+        <!-- (Removed floating card header, merged into items below if needed) -->
+
+        <div class="grid lg:grid-cols-2">
+          <!-- CREATE BATCH CARD -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title"><span>💊</span> Create New Batch</h3>
+            </div>
+
+            <div class="flex flex-col gap-4">
+              <div>
+                <input
+                  id="batchId"
+                  placeholder="Batch ID (e.g., BATCH-001)"
+                  class="input"
+                />
+              </div>
+              <div>
+                <input
+                  id="medicineName"
+                  placeholder="Medicine Name"
+                  class="input"
+                />
+              </div>
+              <div>
+                <input
+                  id="quantity"
+                  type="number"
+                  placeholder="Quantity"
+                  class="input"
+                />
+              </div>
+
+              <div class="grid md:grid-cols-2">
+                <div>
+                  <label class="label">Production Date</label>
+                  <input
+                    id="productionDate"
+                    type="datetime-local"
+                    class="input"
+                  />
+                </div>
+                <div>
+                  <label class="label">Expiry Date</label>
+                  <input id="expiryDate" type="datetime-local" class="input" />
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-6 flex gap-2">
+              <input
+                id="factoryLocation"
+                placeholder="Factory Location / Plus Code"
+                class="input flex-grow"
+              />
+              <a
+                href="https://plus.codes/map"
+                target="_blank"
+                class="btn btn-secondary"
+                title="Find Plus Code 🌍"
+                >🌍</a
+              >
+              <button
+                type="button"
+                id="btnGetLoc"
+                class="btn btn-primary"
+                title="Use GPS"
+              >
+                📍
+              </button>
+            </div>
+
+            <div class="mt-6">
+              <label class="label"
+                >Production Certificate (PDF/IMG, Max 50MB)</label
+              >
+              <input type="file" id="certificateFile" class="file-input" />
+            </div>
+
+            <button
+              id="createBatchBtn"
+              onclick="createBatch()"
+              class="btn btn-primary btn-lg mt-8"
+            >
+              Confirm Batch Details
+            </button>
+            <div
+              id="uploadStatus"
+              class="mt-4 text-center"
+              style="color: var(--color-accent); font-weight: 500"
+            ></div>
+          </div>
+
+          <!-- QR & STATUS CARD -->
+          <div class="card" style="height: fit-content">
+            <div class="card-header">
+              <h3 class="card-title"><span>📱</span> QR Code</h3>
+            </div>
+
+            <div
+              id="qrContainer"
+              class="flex justify-center items-center"
+              style="
+                background: white;
+                padding: 2rem;
+                border-radius: var(--radius-lg);
+                min-height: 300px;
+                border: 4px solid #e2e8f0;
+              "
+            >
+              <span style="color: #94a3b8; font-weight: 500"
+                >QR Code will appear here</span
+              >
+            </div>
+            <p
+              class="text-center mt-4"
+              style="color: var(--color-text-muted); font-size: 0.875rem"
+            >
+              Scan to verify chain integrity.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Theme Logic (Visual Only) -->
+    <script>
+      const toggleBtn = document.getElementById("theme-toggle");
+      const body = document.body;
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light") body.classList.add("light-mode");
+
+      toggleBtn.addEventListener("click", () => {
+        body.classList.toggle("light-mode");
+        const isLight = body.classList.contains("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+      });
+
+      // Fade In App
+      window.addEventListener("load", () => {
+        setTimeout(() => {
+          document.getElementById("app").classList.remove("hidden");
+          document.getElementById("app").style.opacity = "1";
+        }, 500); // Simulate auth delay
+      });
+    </script>
+
+    <!-- load Firebase Core -->
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Init -->
+    <script src="../js/core/firebase-init.js"></script>
+    <script src="../js/core/auth-utils.js"></script>
+    <script src="../js/auth/requireAccess.js"></script>
+
+    <!-- hashing & QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+
+    <!-- Location -->
+    <script src="../js/utils/openlocationcode.js"></script>
+    <script src="../js/utils/location_utils.js"></script>
+
+    <script src="../js/dashboards/manufacturer-dashboard.js"></script>
+  </body>
+</html>

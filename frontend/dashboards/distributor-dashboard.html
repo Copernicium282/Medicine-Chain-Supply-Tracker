@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Distributor Dashboard</title>
+    <!-- Raw CSS -->
+    <link rel="stylesheet" href="../assets/css/dashboard-shared.css" />
+    <!-- <link rel="stylesheet" href="../assets/css/distributor.css"> -->
+  </head>
+  <body>
+    <!-- Auth blocking overlay -->
+    <div id="auth-blocker" class="overlay">
+      <div class="card text-center" style="max-width: 400px; width: 100%">
+        <div class="spinner"></div>
+        <strong
+          id="redirect-text"
+          style="font-size: 1.25rem; color: var(--color-text-muted)"
+          >Redirecting you…</strong
+        >
+      </div>
+    </div>
+
+    <!-- REAL APP -->
+    <div id="app" class="hidden" style="opacity: 0; transition: opacity 0.5s">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <div class="brand-title">
+          <span style="font-size: 1.5rem">🚚</span>
+          <h1>Distributor Dashboard</h1>
+        </div>
+        <div class="nav-controls">
+          <a href="../index.html" class="btn btn-secondary" title="Home">🏠</a>
+          <a href="../analytics.html" class="btn btn-accent" title="Analytics"
+            >📊</a
+          >
+          <button
+            id="theme-toggle"
+            class="btn btn-secondary"
+            title="Toggle Theme"
+          >
+            🌗
+          </button>
+          <button onclick="logout()" class="btn btn-danger">Logout</button>
+        </div>
+      </nav>
+
+      <div class="container max-w-4xl">
+        <!-- SHIPMENT CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title"><span>🚚</span> Shipment Update</h3>
+          </div>
+
+          <div class="flex gap-2 mb-8">
+            <input
+              id="batchId"
+              placeholder="Batch ID (e.g., BATCH-001)"
+              class="input flex-grow"
+            />
+            <button
+              onclick="loadBatchForShipment()"
+              class="btn btn-primary"
+              title="Load Details"
+            >
+              Load Batch
+            </button>
+          </div>
+
+          <div class="grid md:grid-cols-2">
+            <div>
+              <label class="label">Sender</label>
+              <input
+                id="sender"
+                placeholder="Sender Name / ID"
+                class="input mb-4"
+              />
+
+              <div class="flex gap-2">
+                <input
+                  id="originLocation"
+                  placeholder="Origin Location"
+                  class="input flex-grow"
+                />
+                <a
+                  href="https://plus.codes/map"
+                  target="_blank"
+                  class="btn btn-secondary"
+                  title="Find Plus Code 🌍"
+                  >🌍</a
+                >
+                <button
+                  type="button"
+                  id="btnGetOrigin"
+                  class="btn btn-primary"
+                  title="GPS"
+                >
+                  📍
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label class="label">Receiver</label>
+              <input
+                id="receiver"
+                placeholder="Receiver Name / ID"
+                class="input mb-4"
+              />
+
+              <div class="flex gap-2">
+                <input
+                  id="destLocation"
+                  placeholder="Destination Location"
+                  class="input flex-grow"
+                />
+                <a
+                  href="https://plus.codes/map"
+                  target="_blank"
+                  class="btn btn-secondary"
+                  title="Find Plus Code 🌍"
+                  >🌍</a
+                >
+                <button
+                  type="button"
+                  id="btnGetDest"
+                  class="btn btn-primary"
+                  title="GPS"
+                >
+                  📍
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 mt-6">
+            <div>
+              <label class="label">Quantity</label>
+              <input
+                id="shipmentQty"
+                type="number"
+                placeholder="Quantity Transported"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="label">Departure Time</label>
+              <input id="departureTime" type="datetime-local" class="input" />
+            </div>
+          </div>
+
+          <div class="mt-8">
+            <label class="label">Shipment Evidence (PDF/IMG, Max 50MB)</label>
+            <input type="file" id="evidenceFile" class="file-input" />
+          </div>
+
+          <button
+            id="shipmentBtn"
+            onclick="createShipmentUpdate()"
+            class="btn btn-primary btn-lg mt-8"
+            style="background: linear-gradient(to right, #2563eb, #3b82f6)"
+          >
+            Append Shipment Data
+          </button>
+          <div
+            id="shipmentStatus"
+            class="mt-4 text-center"
+            style="color: var(--color-accent); font-weight: 500"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Theme Logic -->
+    <script>
+      const toggleBtn = document.getElementById("theme-toggle");
+      const body = document.body;
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light") body.classList.add("light-mode");
+      else body.classList.remove("light-mode");
+
+      toggleBtn.addEventListener("click", () => {
+        body.classList.toggle("light-mode");
+        const isLight = body.classList.contains("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+      });
+
+      // Fade In App
+      window.addEventListener("load", () => {
+        setTimeout(() => {
+          document.getElementById("app").classList.remove("hidden");
+          document.getElementById("app").style.opacity = "1";
+        }, 500);
+      });
+    </script>
+
+    <!-- load Firebase Core -->
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Init -->
+    <script src="../js/core/firebase-init.js"></script>
+    <script src="../js/core/auth-utils.js"></script>
+    <script src="../js/auth/requireAccess.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="../js/utils/block-utils.js"></script>
+    <script src="../js/utils/openlocationcode.js"></script>
+    <script src="../js/utils/location_utils.js"></script>
+    <script src="../js/dashboards/distributor-dashboard.js"></script>
+  </body>
+</html>

@@ -1,0 +1,354 @@
+/* =========================================
+   VERIFY PAGE STYLES
+   ========================================= */
+
+:root {
+  --color-brand-dark: #0f172a; /* slate-900 */
+  --color-brand-card: #1e293b; /* slate-800 */
+  --color-brand-primary: #0f807b; /* Turbine Green */
+  --color-brand-secondary: #115e59; /* Darker Teal */
+  --color-brand-accent: #38bdf8; /* Light Blue */
+  --color-text-main: #f8fafc; /* slate-50 */
+  --color-text-muted: #94a3b8; /* slate-400 */
+  --color-border: #334155; /* slate-700 */
+
+  /* Status Colors */
+  --color-success: #4ade80; /* green-400 */
+  --color-warning: #facc15; /* yellow-400 */
+  --color-danger: #ef4444; /* red-500 */
+
+  --font-family: "Inter", system-ui, sans-serif;
+}
+
+/* Default Body */
+body {
+  background-color: var(--color-brand-dark);
+  color: var(--color-text-main);
+  font-family: var(--font-family);
+  margin: 0;
+  line-height: 1.6;
+  min-height: 100vh;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+/* Light Mode */
+body.light-mode {
+  --color-brand-dark: #f8fafc;
+  --color-brand-card: #ffffff;
+  --color-text-main: #1e293b;
+  --color-text-muted: #64748b;
+  --color-border: #e2e8f0;
+
+  /* Contextual overrides */
+  --bg-block-data: #f1f5f9;
+  --border-block-data: #e2e8f0;
+  --text-block-data: #475569;
+
+  --color-danger-text: #b91c1c; /* Darker red for light mode */
+  --color-warning-text: #854d0e; /* Darker yellow/brown */
+  --color-success-text: #15803d; /* Darker green */
+}
+body.light-mode {
+  background-color: var(--color-brand-dark);
+  color: var(--color-text-main);
+}
+
+/* Layout Container */
+.container {
+  max-width: 64rem; /* max-w-5xl */
+  margin: 0 auto;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 1rem;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.header-title a {
+  font-size: 1.5rem;
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+.header-title a:hover {
+  transform: scale(1.1);
+}
+.header-title h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text-main);
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: inherit;
+  transition: transform 0.2s;
+}
+.btn-icon:hover {
+  transform: scale(1.1);
+}
+
+/* Loading */
+#loading {
+  text-align: center;
+  font-size: 1.25rem;
+  color: var(--color-text-muted);
+  margin: 3rem 0;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Status Box */
+.status-box {
+  display: none; /* Toggled via JS */
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  margin-bottom: 2rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.125rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.status-box.error {
+  background-color: rgba(127, 29, 29, 0.2); /* red-900/20 */
+  border-color: #991b1b;
+  color: var(--color-danger);
+}
+.status-box.success {
+  background-color: rgba(20, 83, 45, 0.2);
+  border-color: #166534;
+  color: var(--color-success);
+}
+.status-box.warning {
+  background-color: rgba(120, 53, 15, 0.2);
+  border-color: #92400e;
+  color: var(--color-warning);
+}
+
+/* Map */
+#map {
+  height: 24rem;
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid var(--color-border);
+  margin-bottom: 3rem;
+  z-index: 0;
+  display: none; /* Toggled */
+}
+#map.visible {
+  display: block;
+}
+
+/* Chain Timeline */
+.chain-container {
+  /* 
+   * Timeline Layout
+   * We use a relative container with a pseudo-element line (::before) to draw the continuous vertical connection.
+   * This allows the timeline to grow dynamically with any number of blocks without manual height calculations.
+   */
+  position: relative;
+  padding-left: 1.25rem; /* Space for line */
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* The vertical line */
+.chain-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1.25rem; /* Align with dot center approx */
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-border),
+    transparent
+  );
+}
+
+/* Block Styles */
+.block-card {
+  position: relative;
+  margin-left: 2.5rem;
+  background-color: var(--color-brand-card);
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+.block-card:hover {
+  transform: scale(1.01);
+  border-color: var(--color-brand-primary);
+}
+
+.block-card.invalid {
+  border-color: var(--color-danger);
+  background-color: rgba(127, 29, 29, 0.1);
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -3.8rem; /* -(2.5rem margin + half width dot + extra) -> Needs tuning */
+  top: 1.5rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 4px solid var(--color-brand-dark);
+  box-shadow: 0 0 10px rgba(15, 128, 123, 0.5);
+  z-index: 1;
+}
+.timeline-dot.valid {
+  background-color: var(--color-brand-primary);
+}
+.timeline-dot.invalid {
+  background-color: var(--color-danger);
+  box-shadow: none;
+}
+
+/* Block Content */
+.block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.block-title h4 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text-main);
+}
+
+.role-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.125rem 0.5rem;
+  background-color: #374151; /* gray-700 */
+  color: #d1d5db;
+  border-radius: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.block-meta {
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.block-data {
+  background-color: var(--bg-block-data, rgba(30, 41, 59, 0.5));
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-block-data, rgba(51, 65, 85, 0.5));
+  font-size: 0.875rem;
+  color: var(--text-block-data, #cbd5e1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.data-row {
+  display: flex;
+  justify-content: space-between;
+}
+.data-label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.data-value {
+  color: var(--color-text-main);
+  text-align: right;
+}
+
+.link-action {
+  color: var(--color-brand-accent);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.link-action:hover {
+  text-decoration: underline;
+}
+
+.hash-section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  word-break: break-all;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.hash-valid {
+  color: var(--color-success);
+}
+.hash-invalid {
+  color: var(--color-danger);
+}
+
+/* Alert Boxes (in chain) */
+.alert-box {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.alert-box.recall {
+  background-color: rgba(127, 29, 29, 0.2);
+  border-color: #991b1b;
+  color: var(--color-danger-text, #fca5a5);
+}
+.alert-box.expired {
+  background-color: rgba(127, 29, 29, 0.2);
+  border-color: #991b1b;
+  color: var(--color-danger-text, #fca5a5);
+  font-weight: 700;
+  border-width: 2px;
+}
+/* Ensure status boxes also respect light mode text preference if set */
+body.light-mode .status-box.error {
+  color: var(--color-danger-text);
+}
+body.light-mode .status-box.success {
+  color: var(--color-success-text);
+}
+body.light-mode .status-box.warning {
+  color: var(--color-warning-text);
+}

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login | MedChain</title>
+
+    <!-- Decoupled CSS -->
+    <link rel="stylesheet" href="assets/css/login.css" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- Floating Icons -->
+    <div class="floating-actions">
+      <a href="index.html" class="action-btn" title="Back to Home">🏠</a>
+      <button id="theme-toggle" class="action-btn">🌗</button>
+    </div>
+
+    <!-- Main Card -->
+    <div class="box">
+      <h2>Login</h2>
+
+      <div class="login-form">
+        <div class="input-group">
+          <input id="email" type="email" placeholder="Email" />
+        </div>
+
+        <div class="input-group">
+          <input id="password" type="password" placeholder="Password" />
+        </div>
+
+        <button id="loginBtn" onclick="login()" class="btn-primary">
+          Login
+        </button>
+      </div>
+
+      <div class="divider">
+        <div class="divider-line"></div>
+        <span class="divider-text">Or continue with</span>
+      </div>
+
+      <button
+        type="button"
+        id="metaBtn"
+        onclick="loginWithMetamask()"
+        class="meta-btn"
+      >
+        🦊 Login with Metamask
+      </button>
+
+      <p class="text-sm-center">
+        Don't have an account? <a href="signup.html">Signup</a>
+      </p>
+    </div>
+
+    <!-- Theme Logic -->
+    <script>
+      const toggleBtn = document.getElementById("theme-toggle");
+      const body = document.body;
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light") {
+        body.classList.add("light-mode");
+      }
+
+      toggleBtn.addEventListener("click", () => {
+        body.classList.toggle("light-mode");
+        const isLight = body.classList.contains("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+      });
+    </script>
+
+    <!-- load Firebase Core -->
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Init -->
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/auth-utils.js"></script>
+    <script src="js/auth/login.js"></script>
+    <script src="js/auth/metamask-login.js"></script>
+  </body>
+</html>

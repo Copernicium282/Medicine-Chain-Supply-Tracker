@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Supply Chain Analytics | MedChain</title>
+
+    <!-- Decoupled CSS -->
+    <link rel="stylesheet" href="assets/css/analytics.css" />
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <!-- Loading Screen -->
+    <div id="loading">📊 Crunching Data...</div>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="brand-title">
+        <a href="index.html">🏠</a>
+        <h1>Supply Chain Analytics</h1>
+      </div>
+      <div id="navControls" class="nav-controls">
+        <span id="lastUpdated" class="last-updated">Live Data</span>
+        <button id="theme-toggle" class="btn-icon">🌗</button>
+      </div>
+    </nav>
+
+    <div class="container">
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Batches</div>
+          <div class="kpi-value text-white" id="totalBatches">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">In Transit</div>
+          <div class="kpi-value text-yellow" id="batchesInTransit">0</div>
+          <!-- Yellow -->
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Delivered</div>
+          <div class="kpi-value text-green" id="batchesDelivered">0</div>
+          <!-- Green -->
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Volume Tracked (Units)</div>
+          <div class="kpi-value text-blue" id="totalVolume">0</div>
+          <!-- Blue -->
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-grid">
+        <!-- Status Distribution -->
+        <div class="chart-container">
+          <h3 class="chart-title">Batch Status Distribution</h3>
+          <div class="canvas-wrapper">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Recent Production -->
+        <div class="chart-container">
+          <h3 class="chart-title">Production Trend (Last 7 Days)</h3>
+          <div class="canvas-wrapper">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Only: Participant Table -->
+      <div id="participant-table-container">
+        <!-- Injected by JS -->
+      </div>
+    </div>
+
+    <!-- Theme Logic -->
+    <script>
+      const toggleBtn = document.getElementById("theme-toggle");
+      const body = document.body;
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light") body.classList.add("light-mode");
+
+      toggleBtn.addEventListener("click", () => {
+        body.classList.toggle("light-mode");
+        const isLight = body.classList.contains("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+
+        // Update Charts if function exists (analytics.js loaded)
+        if (typeof updateChartsTheme === "function") {
+          updateChartsTheme();
+        }
+      });
+    </script>
+
+    <!-- Firebase Init -->
+    <script src="js/core/firebase-init.js"></script>
+
+    <!-- Analytics Logic -->
+    <!-- Ethers.js for Metamask -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <!-- Local Node (Offline Support) -->
+    <script src="js/utils/local-node.js"></script>
+    <!-- Main Script -->
+    <script src="js/utils/analytics.js"></script>
+  </body>
+</html>

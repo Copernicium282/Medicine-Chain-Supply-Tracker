@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MedChain | Transparent Supply Chain</title>
+
+    <!-- Decoupled Styling -->
+    <link rel="stylesheet" href="assets/css/index.css" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="logo">
+        <span>💊</span> <span class="logo-text">MedChain</span>
+      </div>
+      <div class="nav-links">
+        <a href="login.html" class="btn btn-login">Login</a>
+        <a href="signup.html" class="btn btn-primary">Get Started</a>
+        <button id="theme-toggle" class="btn-icon">🌗</button>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="hero">
+      <!-- Abstract Glow Background -->
+      <div class="hero-glow"></div>
+
+      <div class="hero-content">
+        <h1>Trust Your Medicine.</h1>
+        <p>
+          A decentralized supply chain system identifying safety at every step.
+          Verify authenticity instantly on the blockchain.
+        </p>
+
+        <!-- Search Box -->
+        <div class="search-container">
+          <div class="search-box">
+            <input
+              type="text"
+              id="publicBatchId"
+              placeholder="Enter Batch ID (e.g., BATCH-001)"
+            />
+            <button onclick="goToVerify()" class="btn-search">Verify</button>
+          </div>
+        </div>
+
+        <div class="analytics-link">
+          <a href="analytics.html">
+            View Network Analytics <span style="font-size: 1.25rem">📊</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature Section -->
+    <div class="features-section">
+      <div class="card-grid">
+        <div class="card">
+          <h3>
+            <span class="card-icon">🛡️</span>
+            Tamper Proof
+          </h3>
+          <p>
+            Every shipment is cryptographically linked using SHA-256 hash
+            chains, making history immutable.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span class="card-icon">🌍</span>
+            Global Tracking
+          </h3>
+          <p>
+            Real-time location data tracked from factory floor to pharmacy shelf
+            using global standards.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span class="card-icon">⚡</span>
+            Instant Verify
+          </h3>
+          <p>
+            Scan a secure QR code to audit the complete history of any medicine
+            batch in seconds.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      Secure Supply Chain Tracking System (Prototype)
+    </footer>
+
+    <!-- Main Logic -->
+    <script>
+      // --- Handle Dark/Light Mode ---
+      const toggleBtn = document.getElementById("theme-toggle");
+      const body = document.body;
+
+      // Check saved theme
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light") {
+        body.classList.add("light-mode");
+      }
+
+      toggleBtn.addEventListener("click", () => {
+        body.classList.toggle("light-mode");
+        const isLight = body.classList.contains("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+      });
+
+      // --- Redirect to Verification Page ---
+      function goToVerify() {
+        const id = document.getElementById("publicBatchId").value.trim();
+        if (id) {
+          window.location.href = `verify.html?batchId=${encodeURIComponent(
+            id
+          )}`;
+        } else {
+          alert("Please enter a Batch ID.");
+        }
+      }
+    </script>
+  </body>
+</html>

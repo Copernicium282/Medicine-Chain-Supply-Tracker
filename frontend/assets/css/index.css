@@ -1,0 +1,360 @@
+/* =========================================
+   LANDING PAGE STYLES (index.css)
+   ========================================= */
+
+:root {
+  /* 
+   * Color Palette Definition
+   * We use CSS variables for all colors to ensure instant consistency across the app.
+   * This also makes implementing Dark/Light mode trivial by just overriding these variables 
+   * under the 'body.light-mode' class selector.
+   */
+  --color-brand-dark: #0f172a; /* slate-900 */
+  --color-brand-card: #1e293b; /* slate-800 */
+  --color-brand-primary: #0f807b; /* Turbine Green */
+  --color-brand-secondary: #115e59; /* Darker Teal */
+  --color-brand-accent: #38bdf8; /* Light Blue */
+  --color-text-main: #f8fafc; /* slate-50 */
+  --color-text-muted: #94a3b8; /* slate-400 */
+  --color-border: #334155; /* slate-700 */
+  --font-family: "Inter", system-ui, sans-serif;
+}
+
+/* Default Body (Dark Mode by default) */
+body {
+  background-color: var(--color-brand-dark);
+  color: var(--color-text-main);
+  font-family: var(--font-family);
+  margin: 0;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Light Mode Override */
+body.light-mode {
+  --color-brand-dark: #f8fafc;
+  --color-brand-card: #ffffff;
+  --color-text-main: #1e293b;
+  --color-text-muted: #64748b;
+  --color-border: #e2e8f0;
+}
+body.light-mode {
+  background-color: var(--color-brand-dark);
+  color: var(--color-text-main);
+}
+
+/* ============================
+   UI COMPONENTS
+   ============================ */
+
+/* Navbar */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-brand-dark); /* Ensure it matches body */
+  width: 100%;
+  box-sizing: border-box; /* Fix lines not going till end */
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-brand-accent);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+body.light-mode .logo {
+  color: #0284c7;
+}
+.logo-text {
+  letter-spacing: -0.025em;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  color: white;
+  align-items: center;
+  justify-content: center;
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+.btn-login {
+  background-color: #374151; /* gray-700 */
+}
+.btn-login:hover {
+  background-color: #4b5563; /* gray-600 */
+}
+
+.btn-primary {
+  background-color: var(--color-brand-primary);
+  box-shadow: 0 10px 15px -3px rgba(20, 184, 166, 0.2);
+}
+.btn-primary:hover {
+  background-color: var(--color-brand-secondary);
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.5rem;
+  transition: transform 0.2s;
+  padding: 0;
+  color: inherit;
+}
+.btn-icon:hover {
+  transform: scale(1.1);
+}
+
+/* Hero Section */
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 5rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24rem;
+  height: 24rem;
+  background-color: var(--color-brand-primary);
+  opacity: 0.2;
+  filter: blur(120px);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 10;
+  max-width: 50rem;
+  margin: 0 auto;
+}
+
+.hero h1 {
+  font-size: 3rem;
+  margin-bottom: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(
+    to right,
+    #2dd4bf,
+    #3b82f6
+  ); /* teal-400 to blue-500 */
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transition: transform 0.5s;
+}
+.hero h1:hover {
+  transform: scale(1.05);
+}
+
+@media (min-width: 768px) {
+  .hero h1 {
+    font-size: 4.5rem;
+  }
+}
+
+.hero p {
+  font-size: 1.25rem;
+  color: var(--color-text-muted);
+  max-width: 42rem;
+  margin: 0 auto 2.5rem auto;
+  font-weight: 300;
+}
+
+/* Search Box */
+.search-container {
+  display: flex;
+  justify-content: center;
+  position: relative; /* z-index context */
+  z-index: 10;
+}
+
+.search-box {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid var(--color-border);
+  padding: 0.5rem;
+  border-radius: 9999px;
+  display: flex;
+  width: 100%;
+  max-width: 32rem;
+  transition: all 0.3s;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+.search-box:focus-within {
+  border-color: var(--color-brand-accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.5);
+}
+body.light-mode .search-box {
+  background: white;
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  color: inherit;
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  outline: none;
+}
+
+.btn-search {
+  background-color: var(--color-brand-primary);
+  color: white;
+  padding: 0.75rem 2rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.btn-search:hover {
+  background-color: var(--color-brand-secondary);
+}
+
+.analytics-link {
+  margin-top: 2rem;
+  position: relative;
+  z-index: 10;
+}
+.analytics-link a {
+  color: var(--color-brand-accent);
+  text-decoration: none;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.analytics-link a:hover {
+  color: #93c5fd; /* blue-300 */
+}
+
+/* Features Section */
+.features-section {
+  padding: 4rem 1.5rem;
+  width: 100%;
+  max-width: 1200px; /* Container mx-auto equiv */
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.card-grid {
+  display: grid;
+  /* 
+   * We use CSS Grid here instead of Flexbox because we want 2D alignment.
+   * Cards should line up perfectly in rows AND columns.
+   * '1fr' allows the track to take up available space, fixing the "stretching" issue.
+   */
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.card {
+  background-color: var(--color-brand-card);
+  border: 1px solid var(--color-border);
+  padding: 2rem;
+  border-radius: 1rem;
+  transition: all 0.3s;
+  /* width: 100%;  -- Already consistent with grid */
+  text-align: left;
+}
+.card:hover {
+  border-color: var(--color-brand-primary);
+  transform: translateY(-0.5rem);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+/* Specific hover colors for different cards if needed like in original HTML, but standardizing is cleaner. 
+   Original had: hover:border-brand-primary, hover:border-blue-500, hover:border-yellow-500.
+   Let's keep it simple or use nth-child for variety.
+*/
+
+.card:nth-child(2):hover {
+  border-color: #3b82f6; /* blue-500 */
+}
+.card:nth-child(3):hover {
+  border-color: #eab308; /* yellow-500 */
+}
+
+.card h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: inherit;
+}
+
+.card-icon {
+  font-size: 2rem;
+  transition: transform 0.3s;
+  display: inline-block;
+}
+.card:hover .card-icon {
+  transform: scale(1.1);
+}
+
+.card p {
+  color: var(--color-text-muted);
+  line-height: 1.625;
+  margin: 0;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 2rem;
+  color: #64748b; /* slate-500 */
+  border-top: 1px solid var(--color-border);
+  font-size: 0.875rem;
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--color-brand-dark);
+}
+body.light-mode .footer {
+  background-color: var(--color-brand-dark); /* Keep consistent or override? */
+}

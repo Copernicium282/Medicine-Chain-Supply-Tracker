@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Admin Dashboard</title>
+    <!-- Raw CSS -->
+    <link rel="stylesheet" href="../assets/css/dashboard-shared.css" />
+    <!-- <link rel="stylesheet" href="../assets/css/admin.css"> -->
+  </head>
+  <body>
+    <!-- Auth blocking overlay -->
+    <div id="auth-blocker" class="overlay">
+      <div class="card text-center" style="max-width: 400px; width: 100%">
+        <div class="spinner"></div>
+        <strong
+          id="redirect-text"
+          style="font-size: 1.25rem; color: var(--color-text-muted)"
+          >Redirecting you…</strong
+        >
+      </div>
+    </div>
+
+    <!-- REAL APP -->
+    <div id="app" class="hidden" style="opacity: 0; transition: opacity 0.5s">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <div class="brand-title">
+          <span style="font-size: 1.5rem">🛡️</span>
+          <h1>Admin Dashboard</h1>
+        </div>
+        <div class="nav-controls">
+          <button
+            id="theme-toggle"
+            class="btn btn-secondary"
+            title="Toggle Theme"
+          >
+            🌗
+          </button>
+          <button onclick="logout()" class="btn btn-danger">Logout</button>
+        </div>
+      </nav>
+
+      <div class="container max-w-6xl">
+        <div class="card">
+          <div
+            class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4"
+          >
+            <h3 class="card-title flex items-center gap-2">
+              <span>⛓️</span> Network Oversight
+            </h3>
+            <div class="flex gap-2">
+              <button
+                onclick="window.location.href='../analytics.html'"
+                class="btn btn-primary"
+              >
+                📊 Analytics
+              </button>
+              <button onclick="runHealthCheck()" class="btn btn-purple">
+                🛡️ Health Check
+              </button>
+              <button onclick="loadAllBatches()" class="btn btn-success">
+                🔄 Refresh
+              </button>
+            </div>
+          </div>
+
+          <p class="label mb-4">
+            Monitor supply chain activity and manage product recalls.
+          </p>
+          <hr
+            style="
+              border: 0;
+              border-top: 1px solid var(--color-border);
+              margin: 1.5rem 0;
+            "
+          />
+
+          <!-- FILTERS -->
+          <div class="mb-4">
+            <input
+              id="searchBatchId"
+              placeholder="Search by Batch ID..."
+              class="input w-full md:w-1/2"
+            />
+          </div>
+
+          <!-- DATA TABLE -->
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Batch ID</th>
+                  <th>Medicine Name</th>
+                  <th>Created By</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="batchTableBody">
+                <tr>
+                  <td colspan="5" style="text-align: center; padding: 2rem">
+                    Loading batches...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Theme Logic -->
+    <script>
+      const toggleBtn = document.getElementById("theme-toggle");
+      const body = document.body;
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light") body.classList.add("light-mode");
+      else body.classList.remove("light-mode");
+
+      toggleBtn.addEventListener("click", () => {
+        body.classList.toggle("light-mode");
+        const isLight = body.classList.contains("light-mode");
+        localStorage.setItem("theme", isLight ? "light" : "dark");
+      });
+
+      // Fade In App
+      window.addEventListener("load", () => {
+        setTimeout(() => {
+          document.getElementById("app").classList.remove("hidden");
+          document.getElementById("app").style.opacity = "1";
+        }, 500);
+      });
+    </script>
+
+    <!-- load Firebase Core -->
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore-compat.js"></script>
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Init -->
+    <script src="../js/core/firebase-init.js"></script>
+    <script src="../js/core/auth-utils.js"></script>
+    <script src="../js/auth/requireAccess.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="../js/utils/local-node.js"></script>
+    <script src="../js/utils/verification-utils.js"></script>
+    <script src="../js/utils/block-utils.js"></script>
+    <script src="../js/dashboards/admin-dashboard.js"></script>
+  </body>
+</html>

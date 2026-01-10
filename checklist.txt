@@ -1,0 +1,76 @@
+# MedChain Feature Testing Checklist
+
+Use this checklist to verify every feature of the application step-by-step.
+
+---
+
+## 1. Authentication & Setup
+- [ ] **Open Index Page:** Open `index.html`. Verify title and "Prototype Version" footer.
+- [ ] **Login (Manufacturer):** Go to `login.html`. Select "Manufacturer". Login (Simulation or Firebase).
+- [ ] **Data Sync:** Verify "Local Node Initialized" appears in the console.
+
+## 2. Manufacturer Workflow (Creation)
+- [ ] **Create Batch:** 
+  - Enter Medicine Name (e.g., "Paracetamol").
+  - Enter Quantity (e.g., 5000).
+  - Click "Confirm".
+- [ ] **Verify Dashboard Update:** The new batch should appear in the "Recent Production" table.
+- [ ] **Check Status:** Status should be **CREATED**.
+- [ ] **Verify QR Code:** Click "QR Code" button. It should open a popup with a generated QR.
+
+## 3. Public Verification (The "Chain")
+- [ ] **Verify Batch:** 
+  - Copy the **Batch ID** from Manufacturer Dashboard.
+  - Open `verify.html?batchId=YOUR_BATCH_ID` (or use Search on Index).
+- [ ] **Check Genesis Block:** You should see **Block #0 (GENESIS)** with valid green border.
+- [ ] **Hash Check:** "Stored Hash" must match "Calculated Hash".
+
+## 4. Distributor Workflow (Shipment)
+- [ ] **Login (Distributor):** Login as Distributor.
+- [ ] **Load Batch:** Enter the same Batch ID. Click "Load Batch".
+- [ ] **Scan/Input Details:**
+  - Sender: "Factory A". Receiver: "Pharmacy B".
+  - Locations: Use "Plus Codes" (e.g., "8FWH+24").
+  - Click "Append Shipment Data" -> "Confirm".
+- [ ] **Check Blockchain:** Go back to `verify.html` refresh. You should see **Block #1 (SHIPMENT)** appended.
+
+## 5. Pharmacy Workflow (Delivery)
+- [ ] **Login (Pharmacy):** Login as Pharmacy.
+- [ ] **Receive Batch:** Enter Batch ID -> "Load".
+- [ ] **Confirm Delivery:** Click "Confirm Delivery".
+- [ ] **Check Blockchain:** Refresh `verify.html`. **Block #2 (DELIVERY_CONFIRMATION)** should appear.
+- [ ] **Check Map:** The map on `verify.html` should now draw a line from Factory -> Distributor -> Pharmacy.
+
+## 6. Admin Workflow & Recall
+- [ ] **Login (Admin):** Login as Admin.
+- [ ] **View Batches:** You should see the batch in the list with status **DELIVERED**.
+- [ ] **Trigger Recall:**
+  - Click "🚨 Recall". Enter reason: "Quality Compromised".
+  - Confirm alert.
+- [ ] **Verify Upgrade:** Refresh Admin Dashboard. Status should be **BEING_RECALLED** (Orange/Red).
+- [ ] **Check Blockchain:** Refresh `verify.html`. **Block #3 (RECALL)** should appear with a red warning box.
+
+## 7. Resilience & Self-Healing (THE BIG TEST)
+*Do this carefully since it involves deleting data.*
+- [ ] **Simulate Deletion:**
+  - Go to Firestore Console (or verify using `verify.html` and note data exists).
+  - **DELETE** the "Recall" block (Log #3) document from Firestore.
+- [ ] **Verify Broken Chain:** 
+  - Reload `verify.html` **without** local node cache (Incognito) -> Should show **MISMATCH / TAMPERED**.
+- [ ] **Trigger Self-Healing:**
+  - Login as **Admin** again (who has the local backup of the Recall).
+  - The Dashboard should auto-run "Integrity Check".
+  - Check Console: "Self-Healing: Batch [ID] Status Mismatch... Restoring...".
+  - Check "System Alerts" section on Admin Dashboard.
+- [ ] **Verify Restoration:**
+  - Go back to `verify.html`. The Recall block should be back!
+- [ ] **Verify Integrity:** The chain should be green (Valid) again.
+
+## 8. Offline Mode
+- [ ] **Disconnect Network:** Turn off Wi-Fi.
+- [ ] **Load Analytics:** Open `analytics.html`.
+- [ ] **Check Fallback:** Loading screen should warn "Generic Network Error" -> "Using Local Node Data".
+- [ ] **Check Data:** KPIs (Total Batches, etc.) should still load from the local cache.
+
+---
+**Completion:** If all steps pass, the Prototype is fully functional and resilient.
