@@ -5,23 +5,23 @@
 ![Blockchain](https://img.shields.io/badge/Blockchain-Hybrid-purple?style=flat-square)
 ![Stack](https://img.shields.io/badge/Tech-Firebase%20%7C%20Supabase%20%7C%20Leaflet-orange?style=flat-square)
 
-> **A Hybrid Blockchain Supply Chain Management System** designed to track pharmaceutical products from factory to pharmacy with transparency, integrity, and accountability.
+> **A Blockchain-Inspired Supply Chain Tracker** that uses cryptographic linking to ensure pharmaceutical integrity from factory to pharmacy.
 
 ---
 
 ## 📋 Project Overview
 
-**MedChain** revolutionizes supply chain tracking by combining the speed of modern cloud databases with the immutability of blockchain logic. It ensures that every step of a medicine's journey—from the manufacturing floor to the patient's hands—is verifiable and tamper-evident.
+**MedChain** revolutionizes supply chain tracking by implementing **Blockchain-inspired logic** (SHA-256 Hashing, Linked Lists, Merkle-like Verification) on top of a standard cloud infrastructure.
 
-Unlike traditional SQL databases, MedChain imposes **Blockchain-inspired logic** (SHA-256 Hashing, Linked Lists, Genesis Blocks) on top of scalable cloud infrastructure.
+It provides the **transparency and tamper-evidence** of a blockchain without the high gas fees or slow transaction times of a decentralized network.
 
 ---
 
 ## 🔥 Unique Features
 
-### 🛡️ Hybrid Blockchain Architecture
+### 🛡️ Hybrid Cryptographic Architecture
 
-Combines the **speed** of centralized databases (Firestore) with the **security** of cryptographic hashing. Fast queries for UI, immutable rigid structure for data.
+Combines the **speed** of centralized databases (Firestore) with the **security** of cryptographic hashing (`SHA-256`). We use a **Cryptographically Linked Ledger** structure where every record acts as a "block" that verifies its predecessor.
 
 ### 🧠 Self-Healing Local Node
 
@@ -106,7 +106,7 @@ if (block.hash !== recomputedHash) {
 
 ### 4. Supabase "Off-Chain" Evidence Locker
 
-**Strategy:** Blockchains shouldn't store PDFs. We upload files to Supabase and only store the **Signed URL** on-chain.
+**Strategy:** Ledgers shouldn't store PDFs. We upload files to Supabase and only store the **Signed URL** in the immutable log.
 
 ```javascript
 // ManufacturerDashboard.js
@@ -118,7 +118,7 @@ const { data: signedData } = await supabase.storage
   .from("certificates")
   .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 Year Validity
 
-const certificateURL = signedData.signedUrl; // This string goes to Blockchain
+const certificateURL = signedData.signedUrl; // This string goes to the Immutable Ledger
 ```
 
 ### 5. Geolocation via Plus Codes
@@ -147,7 +147,7 @@ async function getDeviceLocationAsPlusCode() {
 | **Database** | **Firebase Firestore**  | Scalable NoSQL cloud database storing the "Block" documents.        |
 | **Storage**  | **Supabase**            | Decentralized-style object storage for heavy assets (PDFs, Images). |
 | **Local DB** | **IndexedDB**           | In-browser persistence for the "Local Node".                        |
-| **Crypto**   | **CryptoJS**            | AES Encryption (Local Node) & SHA-256 (Blockchain).                 |
+| **Crypto**   | **CryptoJS**            | AES Encryption (Local Node) & SHA-256 (Ledger Linking).             |
 | **Maps**     | **Leaflet.js**          | Open-source interactive maps for supply chain visualization.        |
 
 ---
