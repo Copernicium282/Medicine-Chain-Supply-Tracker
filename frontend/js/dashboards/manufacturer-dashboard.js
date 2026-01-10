@@ -296,36 +296,69 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function checkActionableReturns() {
   try {
     console.log("Checking for returns...");
-    const snap = await db
-      .collection("batches")
-      .orderBy("timestamp", "desc")
-      .limit(50)
-      .get();
-    if (snap.empty) return;
 
-    for (const doc of snap.docs) {
-      const batchId = doc.id;
+    let batchesToCheck = [];
 
-      const logsSnap = await db
+    // 1. Local Node
+    if (window.localNode) {
+      const local = await localNode.getAllBatches();
+      if (local.length > 0) batchesToCheck = local;
+    }
+
+    // 2. Remote Fallback
+    if (batchesToCheck.length === 0) {
+      const snap = await db
         .collection("batches")
-        .doc(batchId)
-        .collection("logs")
-        .orderBy("index", "desc")
-        .limit(1)
+        .orderBy("timestamp", "desc")
+        .limit(50)
         .get();
+      if (!snap.empty) {
+        batchesToCheck = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      }
+    }
 
-      if (logsSnap.empty) continue;
-      const lastBlock = logsSnap.docs[0].data();
+    if (batchesToCheck.length === 0) return;
 
-      if (lastBlock.eventType === "RETURN_TRANSIT") {
-        const genesisSnap = await db
+    for (const batch of batchesToCheck) {
+      const batchId = batch.id;
+      let lastBlock = null;
+
+      if (batch.logs && batch.logs.length > 0) {
+        const sorted = [...batch.logs].sort((a, b) => a.index - b.index);
+        lastBlock = sorted[sorted.length - 1];
+      } else {
+        const logsSnap = await db
           .collection("batches")
           .doc(batchId)
           .collection("logs")
-          .doc("0")
+          .orderBy("index", "desc")
+          .limit(1)
           .get();
-        if (genesisSnap.exists) {
-          const genesis = genesisSnap.data();
+        if (!logsSnap.empty) lastBlock = logsSnap.docs[0].data();
+      }
+
+      if (!lastBlock) continue;
+
+      if (lastBlock.eventType === "RETURN_TRANSIT") {
+        // We need Genesis block to check createdBy
+        let genesis = null;
+        if (
+          batch.logs &&
+          batch.logs[0] &&
+          batch.logs[0].eventType === "GENESIS"
+        ) {
+          genesis = batch.logs[0];
+        } else {
+          const genesisSnap = await db
+            .collection("batches")
+            .doc(batchId)
+            .collection("logs")
+            .doc("0")
+            .get();
+          if (genesisSnap.exists) genesis = genesisSnap.data();
+        }
+
+        if (genesis) {
           const currentUserId =
             auth.currentUser?.uid || localStorage.getItem("metamask_wallet");
 

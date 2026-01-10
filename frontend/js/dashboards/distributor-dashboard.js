@@ -19,7 +19,32 @@ async function loadBatchForShipment() {
   status.innerText = "Loading batch data...";
 
   try {
-    const lastBlock = await getLastBlock(batchId);
+    // 1. Try Local Node first
+    let lastBlock = null;
+    if (window.localNode) {
+      try {
+        const localBatchWrapper = await localNode.getBatch(batchId);
+        if (localBatchWrapper && localBatchWrapper.data) {
+          const batch = localBatchWrapper.data;
+          if (batch.logs && batch.logs.length > 0) {
+            // Sort and get last
+            const sortedLogs = [...batch.logs].sort(
+              (a, b) => a.index - b.index
+            );
+            lastBlock = sortedLogs[sortedLogs.length - 1];
+            console.log("Loaded batch from Local Node.");
+          }
+        }
+      } catch (e) {
+        console.warn("Local load failed:", e);
+      }
+    }
+
+    // 2. Fallback to Remote
+    if (!lastBlock) {
+      console.log("Local miss. Fetching from Remote...");
+      lastBlock = await getLastBlock(batchId);
+    }
 
     // Verify state is GENESIS
     if (lastBlock.index !== 0 || lastBlock.eventType !== "GENESIS") {
@@ -359,39 +384,70 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function checkForActionableRecalls() {
   try {
     console.log("Checking for recalls...");
-    const snap = await db
-      .collection("batches")
-      .orderBy("timestamp", "desc")
-      .limit(50)
-      .get();
-    if (snap.empty) return;
 
-    for (const doc of snap.docs) {
-      const batchId = doc.id;
+    let batchesToCheck = [];
 
-      // Check Last Block Event
-      const logsSnap = await db
+    // 1. Local Node
+    if (window.localNode) {
+      const local = await localNode.getAllBatches();
+      if (local.length > 0) batchesToCheck = local;
+    }
+
+    // 2. Remote Fallback (only if empty)
+    if (batchesToCheck.length === 0) {
+      const snap = await db
         .collection("batches")
-        .doc(batchId)
-        .collection("logs")
-        .orderBy("index", "desc")
-        .limit(1)
+        .orderBy("timestamp", "desc")
+        .limit(50)
         .get();
+      if (!snap.empty) {
+        // We need to fetch logs for these to be useful, which is expensive.
+        // The original code did N+1 queries. We will replicate that behavior
+        // but only for the fallback path.
+        // Converting snap docs to partial objects
+        batchesToCheck = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      }
+    }
 
-      if (logsSnap.empty) continue;
-      const lastBlock = logsSnap.docs[0].data();
+    if (batchesToCheck.length === 0) return;
 
-      // IF Last Event is RECALL -> This is "BEING_RECALLED" state.
-      if (lastBlock.eventType === "RECALL") {
-        // Fetch complete logs to check involvment
-        const allLogsSnap = await db
+    for (const batch of batchesToCheck) {
+      const batchId = batch.id;
+      let lastBlock = null;
+      let allLogs = [];
+
+      // If we have logs already (Local Node)
+      if (batch.logs && batch.logs.length > 0) {
+        const sorted = [...batch.logs].sort((a, b) => a.index - b.index);
+        lastBlock = sorted[sorted.length - 1];
+        allLogs = sorted;
+      } else {
+        // Fetch from Remote (Fallback path)
+        const logsSnap = await db
           .collection("batches")
           .doc(batchId)
           .collection("logs")
-          .orderBy("index")
+          .orderBy("index", "desc")
+          .limit(1)
           .get();
-        const allLogs = allLogsSnap.docs.map((d) => d.data());
+        if (logsSnap.empty) continue;
+        lastBlock = logsSnap.docs[0].data();
 
+        if (lastBlock.eventType === "RECALL") {
+          const allLogsSnap = await db
+            .collection("batches")
+            .doc(batchId)
+            .collection("logs")
+            .orderBy("index")
+            .get();
+          allLogs = allLogsSnap.docs.map((d) => d.data());
+        }
+      }
+
+      if (!lastBlock) continue;
+
+      // IF Last Event is RECALL -> This is "BEING_RECALLED" state.
+      if (lastBlock.eventType === "RECALL") {
         // Check logical involvement
         const currentUserId =
           auth.currentUser?.uid || localStorage.getItem("metamask_wallet");

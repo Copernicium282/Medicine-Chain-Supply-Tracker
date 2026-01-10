@@ -14,6 +14,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const filtered = allBatches.filter((b) =>
       b.id.toLowerCase().includes(term)
     );
+    // Sort logic (ID) handled in renderTable or pre-sort?
+    // Let's sort here too just in case
+    filtered.sort((a, b) => {
+      // Natural sort for IDs like BATCH-1, BATCH-10
+      return a.id.localeCompare(b.id, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
     renderTable(filtered);
   });
 
@@ -87,55 +96,99 @@ async function loadAllBatches() {
   tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">Fetching blockchain data...</td></tr>`;
 
   try {
-    // Run self-healing
-    // Before displaying data, we cross-reference the Local Node's trusted history
-    // against the Remote Firestore. If any discrepancies (like deleted blocks) are found,
-    // the Local Node automatically restores them to ensure integrity.
+    // Run self-healing (Attempt to fix remote if we have permissions)
     console.log("Running Pre-Load Integrity Check...");
     await localNode.performSelfHealing(db);
 
-    const snapshot = await db
-      .collection("batches")
-      .orderBy("timestamp", "desc")
-      .limit(50)
-      .get();
+    let finalBatches = [];
 
-    const promises = snapshot.docs.map(async (doc) => {
-      const data = doc.data();
-      let derivedStatus = data.status || "IN_FACTORY";
-
-      // Check logs for real status
+    // 1. Try Loading from Local Node (Trusted Source)
+    if (window.localNode) {
       try {
-        const logsSnap = await db
-          .collection("batches")
-          .doc(doc.id)
-          .collection("logs")
-          .orderBy("index", "desc")
-          .limit(1)
-          .get();
+        const localData = await localNode.getAllBatches();
+        if (localData && localData.length > 0) {
+          console.log(`Loaded ${localData.length} batches from Local Node.`);
 
-        if (!logsSnap.empty) {
-          const lastBlock = logsSnap.docs[0].data();
-          if (lastBlock.eventType === "SHIPMENT") derivedStatus = "IN_TRANSIT";
-          else if (lastBlock.eventType === "DELIVERY_CONFIRMATION")
-            derivedStatus = "DELIVERED";
-          else if (lastBlock.eventType === "RECALL")
-            derivedStatus = "BEING_RECALLED";
-          else if (lastBlock.eventType === "RETURN_COMPLETED")
-            derivedStatus = "RECALLED";
+          finalBatches = localData.map((b) => {
+            // Ensure status is accurate based on logs if present
+            let status = b.status || "IN_FACTORY";
+            if (b.logs && Array.isArray(b.logs) && b.logs.length > 0) {
+              // Sort logs just in case
+              const sortedLogs = [...b.logs].sort((x, y) => x.index - y.index);
+              const last = sortedLogs[sortedLogs.length - 1];
+              if (last.eventType === "SHIPMENT") status = "IN_TRANSIT";
+              else if (last.eventType === "DELIVERY_CONFIRMATION")
+                status = "DELIVERED";
+              else if (last.eventType === "RECALL")
+                status = "BEING_RECALLED"; // Or RECALLED
+              else if (last.eventType === "RETURN_COMPLETED")
+                status = "RECALLED";
+            }
+            return { ...b, status };
+          });
         }
       } catch (e) {
-        console.warn("Log fetch failed", e);
+        console.warn("Local Node load failed, falling back to Remote:", e);
       }
+    }
 
-      return {
-        id: doc.id,
-        ...data,
-        status: derivedStatus,
-      };
+    // 2. Fallback to Remote if Local is empty
+    if (finalBatches.length === 0) {
+      console.log("Local Node empty. Fetching from Remote...");
+      const snapshot = await db
+        .collection("batches")
+        .orderBy("timestamp", "desc")
+        .limit(50)
+        .get();
+
+      const promises = snapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        let derivedStatus = data.status || "IN_FACTORY";
+
+        // Check logs for real status
+        try {
+          const logsSnap = await db
+            .collection("batches")
+            .doc(doc.id)
+            .collection("logs")
+            .orderBy("index", "desc")
+            .limit(1)
+            .get();
+
+          if (!logsSnap.empty) {
+            const lastBlock = logsSnap.docs[0].data();
+            if (lastBlock.eventType === "SHIPMENT")
+              derivedStatus = "IN_TRANSIT";
+            else if (lastBlock.eventType === "DELIVERY_CONFIRMATION")
+              derivedStatus = "DELIVERED";
+            else if (lastBlock.eventType === "RECALL")
+              derivedStatus = "BEING_RECALLED";
+            else if (lastBlock.eventType === "RETURN_COMPLETED")
+              derivedStatus = "RECALLED";
+          }
+        } catch (e) {
+          console.warn("Log fetch failed", e);
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          status: derivedStatus,
+        };
+      });
+      finalBatches = await Promise.all(promises);
+    }
+
+    allBatches = finalBatches;
+
+    // SORT BY ID
+    allBatches.sort((a, b) => {
+      return a.id.localeCompare(b.id, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
     });
 
-    allBatches = await Promise.all(promises);
     renderTable(allBatches);
   } catch (err) {
     console.error(err);
@@ -405,49 +458,67 @@ async function runHealthCheck() {
     report.className =
       "bg-brand-card p-8 rounded-2xl border border-gray-700 w-full max-w-4xl shadow-2xl relative";
 
+    // Updated CSS for Report
     report.innerHTML = `
-            <h2 class="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">Network Health Report</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #374151; padding-bottom:1rem; margin-bottom:1.5rem;">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2"><span>🛡️</span> Network Health Report</h2>
+                <div class="text-xs text-gray-500 font-mono">ID: ${Date.now()
+                  .toString()
+                  .slice(-6)}</div>
+            </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-96 my-6 text-left">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-96 mb-6">
                 <!-- Tampered Column -->
-                <div class="flex flex-col border border-red-500/50 bg-red-900/10 rounded-lg overflow-hidden">
-                    <h4 class="bg-red-900/40 text-red-500 font-bold p-3 border-b border-red-500/30 sticky top-0">❌ Tampered (${
-                      tamperedList.length
-                    })</h4>
-                    <div class="overflow-y-auto flex-1 p-2 space-y-1">
+                <div class="flex flex-col border border-red-500/30 bg-red-900/10 rounded-xl overflow-hidden shadow-inner">
+                    <h4 class="bg-red-900/20 text-red-400 font-bold p-3 border-b border-red-500/20 sticky top-0 backdrop-blur-sm flex justify-between">
+                        <span>❌ Tampered</span>
+                        <span class="bg-red-500/20 text-xs px-2 py-1 rounded-full">${
+                          tamperedList.length
+                        }</span>
+                    </h4>
+                    <div class="overflow-y-auto flex-1 p-2 space-y-1 custom-scrollbar">
                         ${
                           tamperedList.length > 0
                             ? tamperedList
                                 .map(
                                   (id) =>
-                                    `<div class="font-mono text-sm text-red-400 border-b border-red-800/30 pb-1">${id}</div>`
+                                    `<div class="flex items-center gap-2 p-2 hover:bg-red-500/10 rounded border-b border-red-800/10 transition-colors">
+                                <span class="text-red-500">⚠️</span>
+                                <span class="font-mono text-sm text-red-300">${id}</span>
+                            </div>`
                                 )
                                 .join("")
-                            : '<div class="p-4 text-gray-500 italic">None detected. System secure.</div>'
+                            : '<div class="p-8 text-center text-gray-500 italic flex flex-col items-center gap-2"><span class="text-2xl opacity-50">🛡️</span>All clear</div>'
                         }
                     </div>
                 </div>
 
                 <!-- Valid Column -->
-                <div class="flex flex-col border border-green-500/50 bg-green-900/10 rounded-lg overflow-hidden">
-                    <h4 class="bg-green-900/40 text-green-500 font-bold p-3 border-b border-green-500/30 sticky top-0">✅ Valid (${
-                      validList.length
-                    })</h4>
-                    <div class="overflow-y-auto flex-1 p-2 space-y-1">
+                <div class="flex flex-col border border-green-500/30 bg-green-900/10 rounded-xl overflow-hidden shadow-inner">
+                    <h4 class="bg-green-900/20 text-green-400 font-bold p-3 border-b border-green-500/20 sticky top-0 backdrop-blur-sm flex justify-between">
+                        <span>✅ Valid</span>
+                        <span class="bg-green-500/20 text-xs px-2 py-1 rounded-full">${
+                          validList.length
+                        }</span>
+                    </h4>
+                    <div class="overflow-y-auto flex-1 p-2 space-y-1 custom-scrollbar">
                         ${validList
                           .map(
                             (id) =>
-                              `<div class="font-mono text-sm text-green-400 border-b border-green-800/30 pb-1">${id}</div>`
+                              `<div class="flex items-center gap-2 p-2 hover:bg-green-500/10 rounded border-b border-green-800/10 transition-colors">
+                                <span class="text-green-500">✓</span>
+                                <span class="font-mono text-sm text-green-300">${id}</span>
+                            </div>`
                           )
                           .join("")}
                     </div>
                 </div>
             </div>
 
-            <div class="text-right">
+            <div class="text-right border-t border-gray-700 pt-4">
                 <button onclick="document.body.removeChild(document.getElementById('healthCheckOverlay'))" 
-                    class="bg-brand-primary hover:bg-brand-secondary text-white px-6 py-2 rounded-lg font-bold shadow-lg transition-colors">
-                    Close Report
+                    class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors flex items-center gap-2 ml-auto">
+                    <span>Close Report</span>
                 </button>
             </div>
         `;

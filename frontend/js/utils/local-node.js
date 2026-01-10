@@ -259,6 +259,36 @@ class MedChainNode {
           }
         }
 
+        // 3. HASH INTEGRITY CHECK (New)
+        // Even if the status matches, the data inside might be tampered.
+        // We fetch the logs and run verifyChain() on them.
+        if (typeof verifyChain === "function") {
+          const logsSnap = await docRef
+            .collection("logs")
+            .orderBy("index")
+            .get();
+          const logs = logsSnap.docs.map((d) => d.data());
+
+          const isRemoteValid = verifyChain(logs);
+          if (!isRemoteValid) {
+            console.warn(
+              `[Self-Healing] Batch ${localBatch.id} - Remote Hash Integrity FAILED (Tampered). Restoring from Local Node.`
+            );
+            needsRestore = true;
+            reason = "Remote Hash Verification Failed (Tampering Detected)";
+          } else {
+            // Optional: Check if Remote matches Local (Cross-Reference)
+            // If both are valid but different, we have a fork. Trust Local for now.
+            if (localBatch.logs && logs.length < localBatch.logs.length) {
+              console.warn(
+                `[Self-Healing] Batch ${localBatch.id} - Remote has fewer logs than Local. Restoring missing blocks.`
+              );
+              needsRestore = true;
+              reason = "Missing Remote Blocks (Truncated Chain)";
+            }
+          }
+        }
+
         if (needsRestore) {
           await this.restoreBatchToRemote(db, localBatch);
 
