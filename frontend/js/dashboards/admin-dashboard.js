@@ -199,10 +199,10 @@ function renderTable(list) {
       <td class="p-4 font-bold" style="color:${statusColor}">
         ${derivedStatus}
       </td>
-      <td class="p-4 flex items-center">
+      <td class="p-4 flex items-center gap-3">
         <button
           onclick="viewDetails('${batch.id}')"
-          class="btn btn-sm btn-outline-secondary mr-2"
+          class="btn btn-outline-secondary"
           title="View Details"
         >
           👁️ View
@@ -211,16 +211,16 @@ function renderTable(list) {
           !derivedStatus.includes("RECALL") && !derivedStatus.includes("RETURN")
             ? `
                     <button onclick="initiateRecall('${batch.id}')" 
-                        class="btn btn-sm btn-outline-danger mr-2" title="Flag for Recall">
+                        class="btn btn-outline-danger" title="Flag for Recall">
                         ⚠️ Recall
                     </button>`
             : ""
         }
         ${
-          derivedStatus.includes("RECALL") || derivedStatus.includes("RETURN")
+          derivedStatus.includes("RETURN")
             ? `
                     <button onclick="deleteBatchForce('${batch.id}')" 
-                        class="btn btn-sm btn-danger shadow-none" title="Force Delete (Admin Only)">
+                        class="btn btn-danger shadow-none" title="Force Delete (Admin Only)">
                         🗑️ Delete
                     </button>`
             : ""

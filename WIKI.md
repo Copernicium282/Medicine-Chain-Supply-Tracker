@@ -1,225 +1,206 @@
 # Technical Architecture & Implementation Guide
 
-> **Version 1.0.0** | **Last Updated:** 2026-01-10
-> This document details the specific implementation logic, code patterns, and security mechanisms used in MedChain. It is intended for developers, auditors, and system architects.
+> **Version 1.1.0 (Deep Dive)** | **Last Updated:** 2026-01-10
+
+This document serves as the **definitive technical manual** for MedChain. It goes beyond high-level concepts to explain _exactly_ how the code works, why specific functions exist, and how the security model protects against vectors like database tampering and Man-in-the-Middle attacks.
 
 ---
 
-## 1. Introduction
+## 1. Core Philosophy: The "Trust-But-Verify" Hybrid Model
 
-MedChain is a **Hybrid Supply Chain Management System** that bridges the gap between Web 2.0 efficiency and Web 3.0 security. It was designed to solve the problem of _Counterfeit Medicine_ in developing markets where connectivity is intermittent and full decentralization is cost-prohibitive.
+MedChain is **not** a traditional decentralized blockchain (like Ethereum). It is a **Cryptographically Verifiable Centralized Ledger**.
 
-The core philosophy is **"Trust but Verify"**. We use centralized cloud infrastructure for performance (Google Cloud/Firestore) but enforce strict cryptographic linking on the client-side to ensure that the central authority (User/Server) cannot silently tamper with the history.
-
----
-
-## 2. Core Architecture
-
-### 2.1 The Hybrid Model
-
-Unlike Ethereum or Hyperledger, MedChain does not rely on a Peer-to-Peer network of consensus nodes. Instead, it uses a **Client-Verifiable Ledger**.
-
-- **Storage Layer:** Firebase Firestore (NoSQL Documents).
-- **Verification Layer:** Client-Side JavaScript (CryptoJS).
-- **Consensus Mechanism:** **"Proof of Previous Hash"**. A new entry is only valid if its `previousHash` field matches the SHA-256 hash of the immediately preceding block.
-
-### 2.2 The "Local Node" Concept
-
-The most unique feature of MedChain is the browser-based Local Node.
-
-- **Technology:** `IndexedDB` (Native Browser Database).
-- **Function:** Every time a user interacts with the system, their browser silently downloads the relevant blockchain data and encrypts it using AES (Advanced Encryption Standard) before storing it locally.
-- **Self-Healing:** On startup, the system compares the Server State (Remote) with the Local State (Trusted). If the server returns a "clean" history but the local node has a "recalled" or "different" history, the system flags a **TAMPERING ALERT** and attempts to overwrite the server with the trusted local copy.
+- **The Problem:** Traditional blockchains are too slow (finality ~15s) and expensive (gas fees) for high-frequency supply chain tracking. Centralized databases (SQL/NoSQL) are fast but mutable (admins can delete history).
+- **The Solution:** Use **Firebase Firestore** for speed, but architect the data as a **Linked List of Hashes**.
+  - **Server:** Acts as a dumb storage pipe. It accepts any data.
+  - **Client:** Acts as the Validator. It refuses to render or accept any block that doesn't cryptographically link to its predecessor.
 
 ---
 
-## 3. detailed Feature Breakdown
+## 2. Codebase Deep Dive
 
-### 3.1 MetaMask Digital Signatures
+### 2.1 The "Local Node" (Self-Healing Mechanism)
 
-We strictly avoid storing passwords. Authentication is handled purely via cryptographic challenges.
+**File:** `frontend/js/utils/local-node.js`
 
-**Workflow:**
+This is the most critical security feature. It turns every user's browser into a "Light Node" that audits the central server.
 
-1.  User clicks "Login with MetaMask".
-2.  Frontend generates a random `nonce` or static challenge string properly Hex-Encoded.
-3.  MetaMask prompts the user to **Sign** this message using their Private Key (Secp256k1).
-4.  The backend (or auth verification function) recovers the Public Address from the signature.
-5.  If `Recovered Address == User Address`, access is granted.
+#### `performSelfHealing(db)`
+
+This function runs automatically on every page load. It compares the "Untrusted" Remote State (Firestore) with the "Trusted" Local State (IndexedDB).
+
+**Logic Flow:**
+
+1.  **Fetch Local Data:** Retrieve all batches stored in the user's encrypted IndexedDB (`this.getAllBatches()`).
+2.  **Fetch Remote Data:** For each local batch, fetch the corresponding document from Firestore.
+3.  **Conflict Detection:**
+    - **Missing Remote:** If the batch exists locally but not remotely, the server has lost data (or it was maliciously deleted). -> **Trigger Restore**.
+    - **Status Regression:** If Local status is `RECALLED` (critical safety state) but Remote status is `DELIVERED`, someone tampered with the database to hide a recall. -> **Trigger Restore**.
+4.  **Auto-Restoration:**
+    - The client pushes its _entire_ trusted local copy (Logs + Metadata) back to Firestore, overwriting the corrupted state.
+    - It logs a `SYSTEM_ALERT` in the `admin_alerts` collection.
 
 ```javascript
-// frontend/js/auth/metamask-signup.js
-async function signupWithMetamask() {
-  const msg = "Signup request for MedChain Supply Tracker";
-  // Hex Encode (Crucial for correct personal_sign behavior)
-  const msgHex =
-    "0x" +
-    Array.from(msg)
-      .map((c) => c.charCodeAt(0).toString(16))
-      .join("");
+// Critical Integrity Check Logic
+if (localStatus === "RECALLED" && remoteData.status !== "RECALLED") {
+  console.warn(`[Self-Healing] Batch ${localBatch.id} Status Mismatch!`);
+  // Check if the RECALL log is actually missing from the chain
+  const logsSnap = await docRef
+    .collection("logs")
+    .where("eventType", "==", "RECALL")
+    .get();
 
-  await window.ethereum.request({
-    method: "personal_sign",
-    params: [msgHex, userWalletAddress],
-  });
+  if (logsSnap.empty) {
+    // The ledger was rewritten to delete the RECALL event.
+    // We MUST overwrite the server with our local proof.
+    needsRestore = true;
+  }
 }
 ```
 
-### 3.2 Geolocation via Plus Codes
+### 2.2 Deterministic Verification
 
-GPS coordinates (`lat/lng`) are float values that can drift due to sensor noise (e.g., `12.999991` vs `12.999992`). This breaks hashing consistency.
-We solve this by converting coordinates into **Open Location Codes (Plus Codes)**, which are distinct, grid-based alphanumeric strings (e.g., `8F29+59 New York`). This ensures that a location scan is always deterministic.
+**File:** `frontend/js/utils/verification-utils.js`
+
+A major challenge in JS-based blockchains is `JSON.stringify()`. In JavaScript, object key order is not guaranteed. `{a:1, b:2}` strings to `"{"a":1,"b":2}"`, but `{b:2, a:1}` strings to `"{"b":2,"a":1}"`. These produce **totally different SHA-256 hashes**.
+
+#### `reconstructVerificationData(block)`
+
+To solve this, we **never** hash the raw `block.data` object directly. We pass it through this reconstruction layer which creates a new object with keys inserted in a strict, hardcoded order.
 
 ```javascript
-// frontend/js/utils/location_utils.js
-const code = OpenLocationCode.encode(latitude, longitude); // Returns "8F29+59"
+function reconstructVerificationData(block) {
+  if (block.eventType === "SHIPMENT") {
+    // ENFORCED ORDER: sender -> origin -> receiver -> dest
+    return {
+      sender: block.data.sender,
+      originLocation: block.data.originLocation, // Even if this key was last in original JSON
+      receiver: block.data.receiver,
+      // ...
+    };
+  }
+}
 ```
 
-### 3.3 Supabase Evidence Locker
+#### `verifyChain(logs)`
 
-Storing binary data (images, PDFs) on a blockchain is inefficient ("Blockchain Bloat").
-**Solution:**
+This function iterates through an array of log entries (blocks).
 
-1.  Upload file to **Supabase Storage** (AWS S3-compatible).
-2.  Generate a time-limited **Signed URL**.
-3.  Store _only_ the Signed URL string in the blockchain block.
-4.  This keeps the ledger lightweight while retaining proof of physical evidence.
+- **Time Complexity:** O(N) where N is chain length.
+- **Constraint:** `currentBlock.previousHash` MUST equal `previousBlock.hash`.
+- **Constraint:** `currentBlock.hash` MUST equal `SHA256(currentBlock.previousHash + JSON.stringify(reconstructedData) + timestamp)`.
+
+If _a single bit_ changes in block #2, the hash check for block #3 will fail. The UI will instantly blank out and show a "TAMPERED" red screen.
 
 ---
 
-## 4. Role-Based Workflows (RBAC)
+## 3. Helper Function Analysis
 
-The logic is predominantly handled in the frontend dashboard scripts, enforcing permissions via checking the user's role against the Firestore `users` collection.
+### 3.1 Geolocation Normalization
+
+**File:** `location_utils.js` (Conceptual)
+
+GPS drift is a nightmare for hashing.
+
+- Scan 1: `40.7128, -74.0060`
+- Scan 2: `40.7128001, -74.0060002` (User moved 1 inch)
+- **Result:** Hash Mismatch! Verification Fails.
+
+**Solution:** **Open Location Codes (Plus Codes)**.
+We interpret the GPS coordinates into a grid cell (e.g., `87G8Q2J8+9J`). Any GPS reading _within that 14x14 meter square_ resolves to the **exact same string**. This gives us location proof that is **hash-stable**.
+
+### 3.2 Append-Only Logic
+
+**File:** `frontend/js/utils/block-utils.js`
+
+#### `appendBlock(batchId, block)`
+
+This function is the only gateway to write to the ledger.
+
+- **Concurrency Lock:** It uses the `block.index` as the Document ID.
+  - If Block #5 exists, and two users try to write Block #6 at the same exact millisecond?
+  - Firestore guarantees that only the _first_ write wins. The second write fails with "Document already exists" because we use `.create()` (or check existence), not `.set()`.
+  - This prevents "Forking" the chain.
+
+---
+
+## 4. Architecture Decisions & Trade-offs
+
+### 4.1 Why not Ethereum?
+
+- **Cost:** Storing ~1KB of shipment data on Mainnet costs ~$5-$50 depending on gas.
+- **Speed:** Users cannot wait 15 seconds for a transaction confirmation at a loading dock.
+- **Privacy:** On Public Ethereum, _everyone_ sees your supply volume. In our Hybrid model, we can use Firestore Security Rules to restrict read access to only authorized parties (e.g., "Only the Distributor assigned to this Batch can view it").
+
+### 4.2 Why Supabase for Storage?
+
+- **Blob Storage:** Blockchains sucks at storing files.
+- **The Pattern:**
+  1.  File -> Supabase Bucket.
+  2.  Supabase -> Returns Signed URL (valid for 1 year).
+  3.  Blockchain -> Stores `certificateURL: "https://supa.co/..."`.
+- **Implication:** Verification proves _which_ file was uploaded at that time. If the file content on Supabase is swapped, the integrity check won't catch it **unless** we also hashed the file content itself (Potential V2 improvement).
+
+---
+
+## 5. Security Threat Model
+
+### 5.1 The "Rogue Admin" Attack
+
+- **Scenario:** A Database Administrator logs into the Firebase Console and manually changes the `quantity` of a shipment from `100` to `50` to steal the rest.
+- **Detection:**
+  - The Admin _cannot_ generate a valid hash for the new quantity because they don't have the original timestamps and random nuances of the previous blocks easily available to re-mine the whole chain forward.
+  - Even if they re-hash that block, **Block N+1** verification will fail because its `previousHash` pointer still points to the _old_ (now deleted) hash.
+  - The chain "snaps" at the point of tampering.
+
+### 5.2 The "Man-in-the-Middle" Attack
+
+- **Scenario:** An attacker intercepts the network request from the Pharmacy.
+- **Defense:** We use HTTPS (Transport Layer Security) _plus_ the application-layer signature. The Pharmacy's browser verifies the hash locally. The attacker places a fake block? The browser rejects it because it doesn't fit the mathematical chain.
+
+---
+
+## 6. Role-Based Workflows (Detailed)
 
 ### 🏭 Manufacturer
 
-- **Responsibilities:** Initialize the Supply Chain.
-- **Key Action:** Mint `GENESIS` Block.
-- **Constraint:** Cannot create a batch with a past date.
-- **Code Flow:**
-  - Input: Name, Qty, Expiry.
-  - Process: `SHA256("0" + Data + Timestamp)` -> `Hash`.
-  - Output: Write to `/batches/{id}/logs/0`.
+- **File:** `manufacturer-dashboard.js`
+- **Constraint:** `if (today < productionDate) throw Error("Time Travel");`
+- **Crypto:** Initializes the chain. The specific SHA-256 process involves salting the initial data with a "0" previousHash to signify Genesis.
 
 ### 🚚 Distributor
 
-- **Responsibilities:** Transport custody.
-- **Key Action:** Append `SHIPMENT` Block.
-- **Constraint:** Logical Check - "Time Travel". A distributor cannot log a shipment `departureTime` that is _before_ the manufacturer's `productionDate`.
-- **Code Flow:**
-  - Fetch `LastBlock`.
-  - Verify `LastBlock.hash`.
-  - Link new block: `previousHash = LastBlock.hash`.
+- **File:** `distributor-dashboard.js`
+- **Constraint:** Logic checks that `sender === currentUser.uid`.
+- **Geo-Fencing:** The code compares the scanned Plus Code with the intended destination. If they don't match, it flags a "Route Deviation" event (though allows the log for audit trail).
 
 ### 🏥 Pharmacy
 
-- **Responsibilities:** Final Verification.
-- **Key Action:** Append `DELIVERED` Block.
-- **Constraint:** If `Today > ExpiryDate`, the system warns the user but allows the log (immutability).
-- **Code Flow:**
-  - Scans QR Code.
-  - System runs `verifyChain()` automatically.
-  - If Valid -> Accept Delivery.
-
-### 🛡️ Admin
-
-- **Responsibilities:** Network Health.
-- **Key Action:** `runHealthCheck()`.
-- **Mechanism:**
-  - Iterates through _all_ batches in Firestore.
-  - Recomputes hashes for every block `i` and compares with stored `hash`.
-  - Checks if `block[i].previousHash === block[i-1].hash`.
-  - If mismatch -> Marks Batch as `COMPROMISED`.
+- **File:** `pharmacy-dashboard.js`
+- **Constraint:** `expiryDate` check. `if (Date.now() > batch.expiry) alert("Expired Medicine!");`
+- **Finality:** Once the `DELIVERED` block is minted, the batch status is locked and cannot be "Undelivered".
 
 ---
 
-## 5. Security Analysis
+## 7. API Reference (Internal)
 
-### 5.1 Threat Model
+### `localNode` (Singleton)
 
-- **Attacker:** Malicious Insider (e.g., Database Admin).
-- **Attack:** Directly editing a Firestore document to change a shipment location.
-- **Defense:**
-  1.  **Hash Mismatch:** The next time any client loads that batch, the client-side `verifyChain()` function will calculate that the modified data results in a different hash than the one stored in the _next_ block's `previousHash`. The chain will break visually.
-  2.  **Local Node Conflict:** If the Manufacturer loads the page, their Local Node (IndexedDB) will see the change, detect the conflict with its encrypted local history, and alert the user.
+The global instance of the `MedChainNode` class.
 
-### 5.2 Client-Side Trust
+- `init()`: Opens IndexedDB connection.
+- `syncBatch(batch)`: Encrypts (AES) and saves a batch.
+- `getBatch(id)`: Decrypts and retrieves a batch.
+- `performSelfHealing(db)`: The watchdog process.
 
-- **Risk:** An attacker modifies the JavaScript code in their own browser to bypass checks.
-- **Mitigation:** This only corrupts _their_ view or their write. It does not corrupt the actual consensus validation performed by other honest nodes (e.g., the Pharmacy receiving the drug). The Pharmacy's code will simply reject the malformed block sent by the malicious Distributor.
+### `block-utils.js`
 
----
+- `getLastBlock(batchId)`
+  - **Returns:** `Promise<Object>` (The data of the block with highest index).
+  - **Throws:** Error if chain is empty (Broken State).
 
-## 6. Disadvantages & Mitigations
+### `auth-utils.js`
 
-### 🔴 1. Centralized Storage Point
-
-**Issue:** The "Ledger" lives on Google's Firestore. If Google deletes the database, the data is lost.
-**Mitigation:** The **Local Node** system acts as a distributed backup. Every user (Manufacturer, Distributor, Pharmacy) carries a shard of the database. Theoretically, the entire chain could be reconstructed from these local IndexedDB instances.
-
-### 🔴 2. Lack of Smart Contracts
-
-**Issue:** Logic is executed in JavaScript, not a decentralized EVM. We cannot "force" a rule (e.g., stopping a shipment) if the user simply bypasses the UI and uses the API directly.
-**Mitigation:** We implement **Cloud Functions** (Server-Side) that double-check the logic. For example, a Firestore Rule can prevent writing a block if the `previousHash` doesn't match the existing doc's hash (Optimistic Concurrency Control).
-
-### 🔴 3. Scalability of Verification
-
-**Issue:** To verify block #100, we currently fetch and hash blocks #0 to #99. This is `O(n)`.
-**Mitigation:** We can implement **Checkpoints**. Every 50 blocks, the Admin signs a "Merkle Root" of the state. Clients then only need to verify from the last trusted Checkpoint.
-
----
-
-## 7. Data Models
-
-### Block Structure (JSON)
-
-```json
-{
-  "index": 1,
-  "eventType": "SHIPMENT",
-  "data": {
-    "location": "8F29+59 New York",
-    "handler": "Distributor_User_123",
-    "temperature": "22C"
-  },
-  "timestamp": "2026-01-10T12:00:00Z",
-  "previousHash": "a1b2c3d4...",
-  "hash": "e5f6g7h8..."
-}
-```
-
-### User Profile (RBAC)
-
-```json
-{
-  "uid": "user_xyz",
-  "role": "manufacturer",
-  "walletAddress": "0x123..."
-}
-```
-
----
-
-## 8. API Reference
-
-### `appendBlock(batchId, blockData)`
-
-> Core function to write to the ledger.
-
-- **Inputs:** `batchId` (String), `blockData` (Object)
-- **Returns:** `Promise<void>`
-- **Logic:**
-  1.  Fetches lock on batch.
-  2.  Validates `blockData.previousHash`.
-  3.  Writes to Firestore subcollection `logs`.
-  4.  Updates parent `status`.
-
-### `verifyChain(batchId)`
-
-> Runs the integrity check.
-
-- **Returns:** `Boolean` (True = Valid, False = Tampered)
-
----
-
-> _© 2026 MedChain Internals_
+- `getEthereum()`
+  - **Returns:** `window.ethereum` provider.
+  - **Logic:** Includes a retry mechanism (500ms delay) because some mobile wallets inject the provider slightly after page load.
