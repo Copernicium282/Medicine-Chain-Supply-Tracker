@@ -206,8 +206,7 @@ async function createBatch() {
       height: 200,
     });
 
-    // Download logic
-    // Download logic
+    // Download & Display Logic
     setTimeout(() => {
       try {
         const img = hiddenDiv.querySelector("img");
@@ -215,6 +214,7 @@ async function createBatch() {
           throw new Error("QR code image not found.");
         }
 
+        // 1. Trigger Download
         const link = document.createElement("a");
         link.href = img.src;
         link.download = `QR_Batch_${batchId}.png`;
@@ -222,13 +222,23 @@ async function createBatch() {
         link.click();
         document.body.removeChild(link);
 
-        // Show success
-        qrContainer.innerHTML = `
-                    <div class="bg-green-500/10 border border-green-500 rounded-lg p-4 text-center">
-                        <strong class="text-green-500">✅ QR Sticker Downloaded</strong><br>
-                        <small class="text-gray-400">File saved to downloads.</small>
-                    </div>
-                `;
+        // 2. Display in UI
+        const displayImg = img.cloneNode(true);
+        displayImg.style.width = "200px";
+        displayImg.style.height = "200px";
+        displayImg.style.margin = "0 auto 1rem auto";
+        displayImg.style.display = "block";
+        displayImg.style.border = "4px solid white";
+        displayImg.style.borderRadius = "0.5rem";
+
+        qrContainer.innerHTML = ""; // Clear loader/text
+        qrContainer.appendChild(displayImg);
+        qrContainer.innerHTML += `
+            <div class="bg-green-500/10 border border-green-500 rounded-lg p-4 text-center">
+                <strong class="text-green-500">✅ QR Sticker Downloaded</strong><br>
+                <small class="text-gray-400">File saved to downloads.</small>
+            </div>
+        `;
       } catch (err) {
         console.error("QR Error", err);
         qrContainer.innerHTML = `<span class="text-red-500 font-bold">Failed to generate QR download.</span>`;
