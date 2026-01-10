@@ -121,12 +121,76 @@ if (block.hash !== recomputedHash) {
 
 ## 👥 Role-Based Workflows
 
-The system enforces strict **Role-Based Access Control (RBAC)**.
+The system enforces strict **Role-Based Access Control (RBAC)** code logic.
 
-1.  **🏭 Manufacturer**: Mints the **Genesis Block**. Generates specific QR codes, uploads production certificates.
-2.  **🚚 Distributor**: Scans QR to pickup. Logs handover location and time. Validates "Time Travel" (cannot pickup before production).
-3.  **🏥 Pharmacy**: Final scan. Verifies expiry dates and integrity. Confirms "Reception Block".
-4.  **🛡️ Admin**: Network oversight. Runs health checks to find broken chains. Can force **Global Recalls**.
+### 🏭 1. Manufacturer: Minting Genesis Blocks
+
+**Action:** Creates the first block in the chain. The `previousHash` is hardcoded to "0".
+
+```javascript
+// ManufacturerDashboard.js
+const genesisBlock = {
+  index: 0,
+  eventType: "GENESIS",
+  data: { medicineName, quantity, productionDate },
+  previousHash: "0",
+  // Hash includes timestamp to ensure uniqueness
+  hash: CryptoJS.SHA256("0" + JSON.stringify(data) + timestamp).toString(),
+};
+await batchRef.collection("logs").doc("0").set(genesisBlock);
+```
+
+### 🚚 2. Distributor: Shipment Logging
+
+**Action:** Appends a block. Must link to the hash of the _latest_ block to maintain integrity.
+
+```javascript
+// DistributorDashboard.js
+const lastBlock = await getLastBlock(batchId);
+const newBlock = {
+  index: lastBlock.index + 1,
+  eventType: "SHIPMENT",
+  previousHash: lastBlock.hash, // Link to previous
+  data: { location: "8F29+59 New York", handler: "Distributor_01" },
+  hash: calculateHash(lastBlock.hash, data, timestamp),
+};
+```
+
+### 🏥 3. Pharmacy: Final Delivery
+
+**Action:** Confirms receipt. This usually marks the end of the write-access for the chain.
+
+```javascript
+// PharmacyDashboard.js
+const deliveryBlock = {
+  eventType: "DELIVERED",
+  data: { condition: "Good", notes: "Received on time" },
+  status: "COMPLETED", // Updates world state
+};
+// Finalize chain
+await appendBlock(batchId, deliveryBlock);
+```
+
+### 🛡️ 4. Admin: Network Health Check
+
+**Action:** Iterates over entire database to find broken links (Hash Mismatches).
+
+```javascript
+// AdminDashboard.js
+async function runHealthCheck() {
+  const batches = await getAllBatches();
+  for (const batch of batches) {
+    let isValid = true;
+    for (let i = 1; i < batch.chain.length; i++) {
+      const current = batch.chain[i];
+      const previous = batch.chain[i - 1];
+      // Broken Link Detection
+      if (current.previousHash !== previous.hash) isValid = false;
+    }
+    if (!isValid) flagBatchAsCompromised(batch.id);
+  }
+}
+```
 
 ---
 
@@ -185,5 +249,3 @@ We do not use mutable table rows for history. We use **Append-Only Log Entries**
     - No `npm install` or build steps required! (Pure Vanilla JS).
 
 ---
-
-> Built with ❤️ by the MedChain Team.
