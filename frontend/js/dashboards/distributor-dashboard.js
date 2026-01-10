@@ -341,7 +341,17 @@ if (btnGetDest) {
 }
 
 // Check for Recalls
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // Sync Check (Self-Healing)
+  if (window.localNode && typeof localNode.performSelfHealing === "function") {
+    try {
+      console.log("Running Integrity Check...");
+      await localNode.performSelfHealing(db);
+    } catch (e) {
+      console.warn("Self-Healing check failed", e);
+    }
+  }
+
   // Wait for auth
   setTimeout(checkForActionableRecalls, 3000);
 });
