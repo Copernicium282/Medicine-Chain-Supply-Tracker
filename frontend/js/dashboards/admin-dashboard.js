@@ -242,22 +242,31 @@ async function initiateRecall(id) {
   if (!reason) return;
 
   try {
-    const user = firebase.auth().currentUser;
-    if (!user) throw new Error("Accidentally logged out.");
+    let user = firebase.auth().currentUser;
+    let userId = user ? user.email : null;
+
+    // Fallback to Wallet ID if no Firebase User
+    if (!userId) {
+      userId =
+        localStorage.getItem("metamask_wallet") ||
+        sessionStorage.getItem("metamask_user");
+    }
+
+    if (!userId) throw new Error("Accidentally logged out (No Session Found).");
 
     // Append RECALL block
-    const prevBlock = await getLastBlock(id); // Changed from getLatestBlock to getLastBlock to match existing util
+    const prevBlock = await getLastBlock(id);
 
     const newBlock = {
       index: prevBlock.index + 1,
       timestamp: new Date().toISOString(),
       eventType: "RECALL",
       role: "admin",
-      createdBy: user.email,
+      createdBy: userId,
       previousHash: prevBlock.hash,
       data: {
         reason: reason,
-        adminUser: user.email,
+        adminUser: userId,
       },
       hash: "", // Calculate
     };
