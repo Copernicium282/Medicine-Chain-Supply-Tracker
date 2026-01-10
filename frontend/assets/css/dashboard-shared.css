@@ -436,3 +436,50 @@ body.light-mode .select {
 .file-input::file-selector-button:hover {
   background-color: var(--color-primary-hover);
 }
+
+/* Badge Link for Tables */
+.badge-link {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(56, 189, 248, 0.1); /* Sky Blue tint */
+  color: var(--color-accent);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-md);
+  font-family: monospace;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.badge-link:hover {
+  background-color: rgba(56, 189, 248, 0.2);
+  transform: translateY(-1px);
+  text-decoration: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Small Button */
+.btn-sm {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+}
+
+.btn-outline-danger {
+  background-color: transparent;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+}
+.btn-outline-danger:hover {
+  background-color: var(--color-danger);
+  color: white;
+}
+
+.btn-outline-secondary {
+  background-color: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+.btn-outline-secondary:hover {
+  border-color: var(--color-text);
+  color: var(--color-text);
+}

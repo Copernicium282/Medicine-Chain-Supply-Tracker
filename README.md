@@ -15,13 +15,15 @@
 
 It provides the **transparency and tamper-evidence** of a blockchain without the high gas fees or slow transaction times of a decentralized network.
 
+> **Note:** This project demonstrates how blockchain _concepts_ can secure a centralized system.
+
 ---
 
 ## 🔥 Unique Features
 
 ### 🛡️ Hybrid Cryptographic Architecture
 
-Combines the **speed** of centralized databases (Firestore) with the **security** of cryptographic hashing (`SHA-256`). We use a **Cryptographically Linked Ledger** structure where every record acts as a "block" that verifies its predecessor.
+Combines the **speed** of centralized databases (Firestore) with the **security** of cryptographic hashing (`SHA-256`). I used a **Cryptographically Linked Ledger** structure where every record acts as a "block" that verifies its predecessor.
 
 ### 🧠 Self-Healing Local Node
 
@@ -41,104 +43,6 @@ Every record (Employment, Shipment, Delivery) is hashed (SHA-256) combined with 
 
 ---
 
-## 💻 Unique Tech Stack & Implementation Logic
-
-Beyond standard web tech, we implemented several advanced mechanisms to create a decentralized-like experience in a Web 2.0 browser environment.
-
-### 1. MetaMask Digital Signatures
-
-**Strategy:** We force the user to **Sign** a distinct message to prove ownership of their private key.
-
-```javascript
-// frontend/js/auth/metamask-signup.js
-async function signupWithMetamask() {
-  const msg = "Signup request for MedChain Supply Tracker";
-  // Hex Encode (Crucial for correct personal_sign behavior)
-  const msgHex =
-    "0x" +
-    Array.from(msg)
-      .map((c) => c.charCodeAt(0).toString(16))
-      .join("");
-
-  // Request signature from user's crypto wallet
-  await window.ethereum.request({
-    method: "personal_sign",
-    params: [msgHex, userWalletAddress],
-  });
-}
-```
-
-### 2. Browser-Based "Local Node" (Self-Healing)
-
-**Strategy:** The client simulates a node using `IndexedDB` and AES encryption to guard against server-side data corruption.
-
-```javascript
-// frontend/assets/scripts/local-node.js
-async function performSelfHealing(db) {
-  const localBatches = await this.getAllBatches(); // Fetch encrypted local copy
-
-  localBatches.forEach(async (batch) => {
-    // Compare Local State (Trusted) vs Remote State (Untrusted)
-    if (localStatus === "RECALLED" && remoteData.status !== "RECALLED") {
-      console.warn("Tampering Detected! Restoring data from Local Node...");
-      await this.restoreBatchToRemote(db, batch);
-    }
-  });
-}
-```
-
-### 3. Client-Side SHA-256 Hashing
-
-**Strategy:** Data is verified _before_ it leaves the browser. We strictly reconstruct objects to ensure deterministic hashing (Key Order matters!).
-
-```javascript
-// frontend/assets/scripts/verification-utils.js
-const orderedData = reconstructVerificationData(block); // Ensure Key Order {a,b} == {a,b}
-
-const recomputedHash = CryptoJS.SHA256(
-  block.previousHash + JSON.stringify(orderedData) + block.timestamp
-).toString();
-
-if (block.hash !== recomputedHash) {
-  throw new Error("Tampering Detected: Hash Mismatch");
-}
-```
-
-### 4. Supabase "Off-Chain" Evidence Locker
-
-**Strategy:** Ledgers shouldn't store PDFs. We upload files to Supabase and only store the **Signed URL** in the immutable log.
-
-```javascript
-// ManufacturerDashboard.js
-const { data, error } = await supabase.storage
-  .from("certificates")
-  .upload(filePath, file);
-
-const { data: signedData } = await supabase.storage
-  .from("certificates")
-  .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 Year Validity
-
-const certificateURL = signedData.signedUrl; // This string goes to the Immutable Ledger
-```
-
-### 5. Geolocation via Plus Codes
-
-**Strategy:** We convert raw GPS coordinates (which drift) into **Open Location Codes** (Plus Codes) for human-readable, consistent location tags.
-
-```javascript
-// location_utils.js
-async function getDeviceLocationAsPlusCode() {
-  const position = await getCurrentPosition(); // Browser API
-  const { latitude, longitude } = position.coords;
-
-  // Convert standard Lat/Lng to "8F29+59 New York"
-  const code = OpenLocationCode.encode(latitude, longitude);
-  return code;
-}
-```
-
----
-
 ## 🛠️ Core Technologies
 
 | Component    | Technology              | Description                                                         |
@@ -150,81 +54,6 @@ async function getDeviceLocationAsPlusCode() {
 | **Crypto**   | **CryptoJS**            | AES Encryption (Local Node) & SHA-256 (Ledger Linking).             |
 | **Maps**     | **Leaflet.js**          | Open-source interactive maps for supply chain visualization.        |
 | **SDKs**     | **External Libs**       | `Chart.js`, `QRCode.js`, `Google Fonts`, `Firebase/Supabase SDKs`.  |
-
----
-
-## 👥 Role-Based Workflows
-
-The system enforces strict **Role-Based Access Control (RBAC)** code logic.
-
-### 🏭 1. Manufacturer: Minting Genesis Blocks
-
-**Action:** Creates the first block in the chain. The `previousHash` is hardcoded to "0".
-
-```javascript
-// ManufacturerDashboard.js
-const genesisBlock = {
-  index: 0,
-  eventType: "GENESIS",
-  data: { medicineName, quantity, productionDate },
-  previousHash: "0",
-  // Hash includes timestamp to ensure uniqueness
-  hash: CryptoJS.SHA256("0" + JSON.stringify(data) + timestamp).toString(),
-};
-await batchRef.collection("logs").doc("0").set(genesisBlock);
-```
-
-### 🚚 2. Distributor: Shipment Logging
-
-**Action:** Appends a block. Must link to the hash of the _latest_ block to maintain integrity.
-
-```javascript
-// DistributorDashboard.js
-const lastBlock = await getLastBlock(batchId);
-const newBlock = {
-  index: lastBlock.index + 1,
-  eventType: "SHIPMENT",
-  previousHash: lastBlock.hash, // Link to previous
-  data: { location: "8F29+59 New York", handler: "Distributor_01" },
-  hash: calculateHash(lastBlock.hash, data, timestamp),
-};
-```
-
-### 🏥 3. Pharmacy: Final Delivery
-
-**Action:** Confirms receipt. This usually marks the end of the write-access for the chain.
-
-```javascript
-// PharmacyDashboard.js
-const deliveryBlock = {
-  eventType: "DELIVERED",
-  data: { condition: "Good", notes: "Received on time" },
-  status: "COMPLETED", // Updates world state
-};
-// Finalize chain
-await appendBlock(batchId, deliveryBlock);
-```
-
-### 🛡️ 4. Admin: Network Health Check
-
-**Action:** Iterates over entire database to find broken links (Hash Mismatches).
-
-```javascript
-// AdminDashboard.js
-async function runHealthCheck() {
-  const batches = await getAllBatches();
-  for (const batch of batches) {
-    let isValid = true;
-    for (let i = 1; i < batch.chain.length; i++) {
-      const current = batch.chain[i];
-      const previous = batch.chain[i - 1];
-      // Broken Link Detection
-      if (current.previousHash !== previous.hash) isValid = false;
-    }
-    if (!isValid) flagBatchAsCompromised(batch.id);
-  }
-}
-```
 
 ---
 
@@ -272,6 +101,25 @@ We do not use mutable table rows for history. We use **Append-Only Log Entries**
 
 ---
 
+## 💻 Unique Tech Stack & Implementation Logic
+
+Beyond standard web tech, I implemented advanced mechanisms like **MetaMask Signals**, **Self-Healing Local Nodes**, and **Client-Side Hashing**.
+
+> 📘 **Developers:** For detailed implementation logic and code snippets, please see the [Technical Architecture Wiki](WIKI.md).
+
+---
+
+## 👥 Role-Based Workflows
+
+The system enforces strict **Role-Based Access Control (RBAC)**.
+
+1.  **🏭 Manufacturer**: Mints the **Genesis Block**. Generates specific QR codes, uploads production certificates.
+2.  **🚚 Distributor**: Scans QR to pickup. Logs handover location and time. Validates "Time Travel" (cannot pickup before production).
+3.  **🏥 Pharmacy**: Final scan. Verifies expiry dates and integrity. Confirms "Reception Block".
+4.  **🛡️ Admin**: Network oversight. Runs health checks to find broken chains. Can force **Global Recalls**.
+
+---
+
 ## 📦 Installation
 
 1.  **Clone the Repository**
@@ -283,3 +131,17 @@ We do not use mutable table rows for history. We use **Append-Only Log Entries**
     - No `npm install` or build steps required! (Pure Vanilla JS).
 
 ---
+
+## 🌟 Credits & Acknowledgments
+
+### Tools & APIs
+
+- **Firebase Firestore**: For the scalable, real-time database.
+- **Supabase Storage**: For securely hosting evidence files off-chain.
+- **Leaflet.js**: For the interactive, privacy-friendly maps.
+- **Google Open Location Codes**: For the immutable "Plus Code" geolocation system.
+- **Chart.js**: For the real-time analytics visualization.
+
+### Special Thanks
+
+- **Antigravity (AI Assistant)**: Served as the primary **CSS-Helper and Debugger**, fixing layout issues and resolving complex JavaScript logic errors during development. 🤖✨

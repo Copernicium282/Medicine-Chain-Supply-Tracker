@@ -184,45 +184,49 @@ function renderTable(list) {
 
     // Row Styling
     const row = `
-            <tr class="border-b border-gray-700 hover:bg-gray-800/50 transition-colors">
-                <td class="p-4 font-mono text-sm text-gray-300">
-                    <a href="../verify.html?batchId=${
-                      batch.id
-                    }" target="_blank" class="text-brand-accent hover:underline">${
-      batch.id
-    }</a>
-                </td>
-                <td class="p-4 text-gray-300">${medName}</td>
-                <td class="p-4 text-gray-400 text-sm">${createdBy}</td>
-                <td class="p-4 font-bold" style="color:${statusColor}">${derivedStatus}</td>
-                <td class="p-4">
-                    <button onclick="viewDetails('${batch.id}')" 
-                        class="bg-transparent border border-gray-500 text-gray-400 hover:border-gray-300 hover:text-white px-3 py-1 rounded text-sm mr-2 transition-colors">
-                        View
-                    </button>
-                    ${
-                      !derivedStatus.includes("RECALL") &&
-                      !derivedStatus.includes("RETURN")
-                        ? `
+    <tr class="border-b border-gray-700 hover:bg-gray-800/50 transition-colors">
+      <td class="p-4">
+        <a
+          href="../verify.html?batchId=${batch.id}"
+          target="_blank"
+          class="badge-link"
+        >
+          ${batch.id}
+        </a>
+      </td>
+      <td class="p-4 text-gray-300">${medName}</td>
+      <td class="p-4 text-gray-400 text-sm font-mono">${createdBy}</td>
+      <td class="p-4 font-bold" style="color:${statusColor}">
+        ${derivedStatus}
+      </td>
+      <td class="p-4 flex items-center">
+        <button
+          onclick="viewDetails('${batch.id}')"
+          class="btn btn-sm btn-outline-secondary mr-2"
+          title="View Details"
+        >
+          👁️ View
+        </button>
+        ${
+          !derivedStatus.includes("RECALL") && !derivedStatus.includes("RETURN")
+            ? `
                     <button onclick="initiateRecall('${batch.id}')" 
-                        class="bg-transparent border border-brand-accent text-brand-accent hover:bg-brand-accent/10 px-3 py-1 rounded text-sm mr-2 transition-colors">
-                        Recall
+                        class="btn btn-sm btn-outline-danger mr-2" title="Flag for Recall">
+                        ⚠️ Recall
                     </button>`
-                        : ""
-                    }
-                    ${
-                      derivedStatus.includes("RECALL") ||
-                      derivedStatus.includes("RETURN")
-                        ? `
+            : ""
+        }
+        ${
+          derivedStatus.includes("RECALL") || derivedStatus.includes("RETURN")
+            ? `
                     <button onclick="deleteBatchForce('${batch.id}')" 
-                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors" title="Force Delete (Admin Only)">
-                        🗑️
+                        class="btn btn-sm btn-danger shadow-none" title="Force Delete (Admin Only)">
+                        🗑️ Delete
                     </button>`
-                        : ""
-                    }
-                </td>
-            </tr>
-        `;
+            : ""
+        }
+      </td>
+    </tr>`;
     tableBody.innerHTML += row;
   });
 }
