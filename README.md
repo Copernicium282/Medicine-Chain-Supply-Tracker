@@ -104,6 +104,39 @@ if (block.hash !== recomputedHash) {
 }
 ```
 
+### 4. Supabase "Off-Chain" Evidence Locker
+
+**Strategy:** Blockchains shouldn't store PDFs. We upload files to Supabase and only store the **Signed URL** on-chain.
+
+```javascript
+// ManufacturerDashboard.js
+const { data, error } = await supabase.storage
+  .from("certificates")
+  .upload(filePath, file);
+
+const { data: signedData } = await supabase.storage
+  .from("certificates")
+  .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 Year Validity
+
+const certificateURL = signedData.signedUrl; // This string goes to Blockchain
+```
+
+### 5. Geolocation via Plus Codes
+
+**Strategy:** We convert raw GPS coordinates (which drift) into **Open Location Codes** (Plus Codes) for human-readable, consistent location tags.
+
+```javascript
+// location_utils.js
+async function getDeviceLocationAsPlusCode() {
+  const position = await getCurrentPosition(); // Browser API
+  const { latitude, longitude } = position.coords;
+
+  // Convert standard Lat/Lng to "8F29+59 New York"
+  const code = OpenLocationCode.encode(latitude, longitude);
+  return code;
+}
+```
+
 ---
 
 ## 🛠️ Core Technologies
