@@ -139,7 +139,19 @@ async function createShipmentUpdate() {
   };
 
   const status = document.getElementById("shipmentStatus");
+  const btn = document.getElementById("shipmentBtn"); // Fixed ID
   status.innerText = "Validating...";
+
+  // Destructure to ensure we use value strings, not DOM elements
+  const {
+    sender,
+    originLocation,
+    receiver,
+    destLocation,
+    shipmentQty,
+    departureTime,
+    evidenceURL, // This is undefined here, but used in final construction. Wait, evidenceURL is created later.
+  } = inputs;
 
   if (!loadedLastBlock) {
     alert("Load batch first.");

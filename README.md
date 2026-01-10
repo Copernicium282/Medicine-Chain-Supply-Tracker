@@ -149,6 +149,7 @@ async function getDeviceLocationAsPlusCode() {
 | **Local DB** | **IndexedDB**           | In-browser persistence for the "Local Node".                        |
 | **Crypto**   | **CryptoJS**            | AES Encryption (Local Node) & SHA-256 (Ledger Linking).             |
 | **Maps**     | **Leaflet.js**          | Open-source interactive maps for supply chain visualization.        |
+| **SDKs**     | **External Libs**       | `Chart.js`, `QRCode.js`, `Google Fonts`, `Firebase/Supabase SDKs`.  |
 
 ---
 
