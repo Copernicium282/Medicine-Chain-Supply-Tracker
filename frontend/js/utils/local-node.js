@@ -130,6 +130,13 @@ class MedChainNode {
     });
   }
 
+  // Checks if batch is recalled in local cache
+  async isRecalled(batchId) {
+    const cached = await this.getBatch(batchId);
+    if (!cached || !cached.data) return false;
+    return this._deriveStatus(cached.data) === "RECALLED";
+  }
+
   // ============================
   // SELF-HEALING / RESTORATION
   // ============================
@@ -255,36 +262,6 @@ class MedChainNode {
               console.warn(
                 `[Self-Healing] Batch ${localBatch.id} Status Stale, but Integrity OK (Recall Log exists). Skipping restore.`
               );
-            }
-          }
-        }
-
-        // 3. HASH INTEGRITY CHECK (New)
-        // Even if the status matches, the data inside might be tampered.
-        // We fetch the logs and run verifyChain() on them.
-        if (typeof verifyChain === "function") {
-          const logsSnap = await docRef
-            .collection("logs")
-            .orderBy("index")
-            .get();
-          const logs = logsSnap.docs.map((d) => d.data());
-
-          const isRemoteValid = verifyChain(logs);
-          if (!isRemoteValid) {
-            console.warn(
-              `[Self-Healing] Batch ${localBatch.id} - Remote Hash Integrity FAILED (Tampered). Restoring from Local Node.`
-            );
-            needsRestore = true;
-            reason = "Remote Hash Verification Failed (Tampering Detected)";
-          } else {
-            // Optional: Check if Remote matches Local (Cross-Reference)
-            // If both are valid but different, we have a fork. Trust Local for now.
-            if (localBatch.logs && logs.length < localBatch.logs.length) {
-              console.warn(
-                `[Self-Healing] Batch ${localBatch.id} - Remote has fewer logs than Local. Restoring missing blocks.`
-              );
-              needsRestore = true;
-              reason = "Missing Remote Blocks (Truncated Chain)";
             }
           }
         }

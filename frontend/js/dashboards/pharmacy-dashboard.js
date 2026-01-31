@@ -119,9 +119,8 @@ async function validateDeliveryInputs(inputs, lastBlock) {
   const currentDeliveryTime = new Date(effectiveDeliveryTime);
 
   if (currentDeliveryTime < prevBlockTime) {
-    return `Invalid Date: Delivery time (${currentDeliveryTime.toLocaleString()}) cannot be before the previous event (${
-      lastBlock.eventType
-    }).`;
+    return `Invalid Date: Delivery time (${currentDeliveryTime.toLocaleString()}) cannot be before the previous event (${lastBlock.eventType
+      }).`;
   }
 
   return null;
@@ -145,6 +144,17 @@ async function confirmDelivery() {
   } catch (e) {
     if (batchId) alert("Batch ID not found.");
     else alert("Please enter Batch ID and Location.");
+    return;
+  }
+
+  // Check local node for recalled status
+  await localNode.init();
+  if (await localNode.isRecalled(batchId)) {
+    const cachedBatch = await localNode.getBatch(batchId);
+    await localNode.restoreBatchToRemote(db, cachedBatch.data);
+    statusDiv.style.color = "red";
+    statusDiv.textContent = "⛔ Batch is RECALLED. Data restored.";
+    alert("⛔ BLOCKED: This batch has been RECALLED and cannot be delivered.");
     return;
   }
 

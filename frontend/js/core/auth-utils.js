@@ -1,6 +1,4 @@
-function redirectToLogin() {
-  window.location.href = "../login.html";
-}
+// redirectToLogin() is defined in requireAccess.js with proper path handling
 
 function logout() {
   // Firebase logout (if logged in)

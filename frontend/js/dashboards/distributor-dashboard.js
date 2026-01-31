@@ -19,32 +19,7 @@ async function loadBatchForShipment() {
   status.innerText = "Loading batch data...";
 
   try {
-    // 1. Try Local Node first
-    let lastBlock = null;
-    if (window.localNode) {
-      try {
-        const localBatchWrapper = await localNode.getBatch(batchId);
-        if (localBatchWrapper && localBatchWrapper.data) {
-          const batch = localBatchWrapper.data;
-          if (batch.logs && batch.logs.length > 0) {
-            // Sort and get last
-            const sortedLogs = [...batch.logs].sort(
-              (a, b) => a.index - b.index
-            );
-            lastBlock = sortedLogs[sortedLogs.length - 1];
-            console.log("Loaded batch from Local Node.");
-          }
-        }
-      } catch (e) {
-        console.warn("Local load failed:", e);
-      }
-    }
-
-    // 2. Fallback to Remote
-    if (!lastBlock) {
-      console.log("Local miss. Fetching from Remote...");
-      lastBlock = await getLastBlock(batchId);
-    }
+    const lastBlock = await getLastBlock(batchId);
 
     // Verify state is GENESIS
     if (lastBlock.index !== 0 || lastBlock.eventType !== "GENESIS") {
@@ -164,19 +139,7 @@ async function createShipmentUpdate() {
   };
 
   const status = document.getElementById("shipmentStatus");
-  const btn = document.getElementById("shipmentBtn"); // Fixed ID
   status.innerText = "Validating...";
-
-  // Destructure to ensure we use value strings, not DOM elements
-  const {
-    sender,
-    originLocation,
-    receiver,
-    destLocation,
-    shipmentQty,
-    departureTime,
-    evidenceURL, // This is undefined here, but used in final construction. Wait, evidenceURL is created later.
-  } = inputs;
 
   if (!loadedLastBlock) {
     alert("Load batch first.");
@@ -188,6 +151,17 @@ async function createShipmentUpdate() {
   if (errorMsg) {
     status.innerText = "";
     alert(errorMsg);
+    return;
+  }
+
+  // Check local node for recalled status
+  await localNode.init();
+  if (await localNode.isRecalled(batchId)) {
+    const cachedBatch = await localNode.getBatch(batchId);
+    await localNode.restoreBatchToRemote(db, cachedBatch.data);
+    status.style.color = "red";
+    status.innerText = "⛔ Batch is RECALLED. Data restored.";
+    alert("⛔ BLOCKED: This batch has been RECALLED and cannot be modified.");
     return;
   }
 
@@ -366,17 +340,7 @@ if (btnGetDest) {
 }
 
 // Check for Recalls
-document.addEventListener("DOMContentLoaded", async () => {
-  // Sync Check (Self-Healing)
-  if (window.localNode && typeof localNode.performSelfHealing === "function") {
-    try {
-      console.log("Running Integrity Check...");
-      await localNode.performSelfHealing(db);
-    } catch (e) {
-      console.warn("Self-Healing check failed", e);
-    }
-  }
-
+document.addEventListener("DOMContentLoaded", () => {
   // Wait for auth
   setTimeout(checkForActionableRecalls, 3000);
 });
@@ -384,70 +348,39 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function checkForActionableRecalls() {
   try {
     console.log("Checking for recalls...");
+    const snap = await db
+      .collection("batches")
+      .orderBy("timestamp", "desc")
+      .limit(50)
+      .get();
+    if (snap.empty) return;
 
-    let batchesToCheck = [];
+    for (const doc of snap.docs) {
+      const batchId = doc.id;
 
-    // 1. Local Node
-    if (window.localNode) {
-      const local = await localNode.getAllBatches();
-      if (local.length > 0) batchesToCheck = local;
-    }
-
-    // 2. Remote Fallback (only if empty)
-    if (batchesToCheck.length === 0) {
-      const snap = await db
+      // Check Last Block Event
+      const logsSnap = await db
         .collection("batches")
-        .orderBy("timestamp", "desc")
-        .limit(50)
+        .doc(batchId)
+        .collection("logs")
+        .orderBy("index", "desc")
+        .limit(1)
         .get();
-      if (!snap.empty) {
-        // We need to fetch logs for these to be useful, which is expensive.
-        // The original code did N+1 queries. We will replicate that behavior
-        // but only for the fallback path.
-        // Converting snap docs to partial objects
-        batchesToCheck = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      }
-    }
 
-    if (batchesToCheck.length === 0) return;
-
-    for (const batch of batchesToCheck) {
-      const batchId = batch.id;
-      let lastBlock = null;
-      let allLogs = [];
-
-      // If we have logs already (Local Node)
-      if (batch.logs && batch.logs.length > 0) {
-        const sorted = [...batch.logs].sort((a, b) => a.index - b.index);
-        lastBlock = sorted[sorted.length - 1];
-        allLogs = sorted;
-      } else {
-        // Fetch from Remote (Fallback path)
-        const logsSnap = await db
-          .collection("batches")
-          .doc(batchId)
-          .collection("logs")
-          .orderBy("index", "desc")
-          .limit(1)
-          .get();
-        if (logsSnap.empty) continue;
-        lastBlock = logsSnap.docs[0].data();
-
-        if (lastBlock.eventType === "RECALL") {
-          const allLogsSnap = await db
-            .collection("batches")
-            .doc(batchId)
-            .collection("logs")
-            .orderBy("index")
-            .get();
-          allLogs = allLogsSnap.docs.map((d) => d.data());
-        }
-      }
-
-      if (!lastBlock) continue;
+      if (logsSnap.empty) continue;
+      const lastBlock = logsSnap.docs[0].data();
 
       // IF Last Event is RECALL -> This is "BEING_RECALLED" state.
       if (lastBlock.eventType === "RECALL") {
+        // Fetch complete logs to check involvment
+        const allLogsSnap = await db
+          .collection("batches")
+          .doc(batchId)
+          .collection("logs")
+          .orderBy("index")
+          .get();
+        const allLogs = allLogsSnap.docs.map((d) => d.data());
+
         // Check logical involvement
         const currentUserId =
           auth.currentUser?.uid || localStorage.getItem("metamask_wallet");

@@ -191,60 +191,42 @@ async function createBatch() {
     const qrContainer = document.getElementById("qrContainer");
     qrContainer.innerHTML = "";
 
-    const verifyURL = new URL("../verify.html", window.location.href).href;
+    const verifyURL = new URL(
+      `../verify.html?batchId=${batchId}`,
+      window.location.href
+    ).href;
 
-    const hiddenDiv = document.createElement("div");
-    Object.assign(hiddenDiv.style, {
-      position: "absolute",
-      visibility: "hidden",
-    });
-    document.body.appendChild(hiddenDiv);
+    const qrWrapper = document.createElement("div");
+    qrWrapper.style.padding = "10px";
+    qrWrapper.style.background = "white";
+    qrWrapper.style.borderRadius = "8px";
+    qrContainer.appendChild(qrWrapper);
 
-    new QRCode(hiddenDiv, {
+    new QRCode(qrWrapper, {
       text: verifyURL,
       width: 200,
       height: 200,
     });
 
-    // Download & Display Logic
-    setTimeout(() => {
-      try {
-        const img = hiddenDiv.querySelector("img");
-        if (!img || !img.src) {
-          throw new Error("QR code image not found.");
-        }
-
-        // 1. Trigger Download
+    const dlBtn = document.createElement("button");
+    dlBtn.className = "btn btn-secondary btn-sm mt-4";
+    dlBtn.innerText = "⬇️ Download QR Sticker";
+    dlBtn.onclick = () => {
+      const img = qrWrapper.querySelector("img");
+      if (img && img.src) {
         const link = document.createElement("a");
         link.href = img.src;
-        link.download = `QR_Batch_${batchId}.png`;
+        link.download = `QR_${batchId}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
-        // 2. Display in UI
-        const displayImg = img.cloneNode(true);
-        displayImg.style.width = "200px";
-        displayImg.style.height = "200px";
-        displayImg.style.margin = "0 auto 1rem auto";
-        displayImg.style.display = "block";
-        displayImg.style.border = "4px solid white";
-        displayImg.style.borderRadius = "0.5rem";
-
-        qrContainer.innerHTML = ""; // Clear loader/text
-        qrContainer.appendChild(displayImg);
-        qrContainer.innerHTML += `
-            <div class="bg-green-500/10 border border-green-500 rounded-lg p-4 text-center">
-                <strong class="text-green-500">✅ QR Sticker Downloaded</strong><br>
-                <small class="text-gray-400">File saved to downloads.</small>
-            </div>
-        `;
-      } catch (err) {
-        console.error("QR Error", err);
-        qrContainer.innerHTML = `<span class="text-red-500 font-bold">Failed to generate QR download.</span>`;
+      } else {
+        alert("QR Code generating... please wait.");
       }
-      document.body.removeChild(hiddenDiv);
-    }, 500);
+    };
+
+    qrContainer.appendChild(dlBtn);
+    qrContainer.style.flexDirection = "column";
 
     // Reset inputs
     document.getElementById("batchId").value = "";
@@ -280,85 +262,43 @@ if (btnGetLoc) {
 }
 
 // Auto-check for Returns
-document.addEventListener("DOMContentLoaded", async () => {
-  // Sync Check (Self-Healing)
-  if (window.localNode && typeof localNode.performSelfHealing === "function") {
-    try {
-      console.log("Running Integrity Check...");
-      await localNode.performSelfHealing(db);
-    } catch (e) {
-      console.warn("Self-Healing check failed", e);
-    }
-  }
+document.addEventListener("DOMContentLoaded", () => {
   setTimeout(checkActionableReturns, 3000);
 });
 
 async function checkActionableReturns() {
   try {
     console.log("Checking for returns...");
+    const snap = await db
+      .collection("batches")
+      .orderBy("timestamp", "desc")
+      .limit(50)
+      .get();
+    if (snap.empty) return;
 
-    let batchesToCheck = [];
+    for (const doc of snap.docs) {
+      const batchId = doc.id;
 
-    // 1. Local Node
-    if (window.localNode) {
-      const local = await localNode.getAllBatches();
-      if (local.length > 0) batchesToCheck = local;
-    }
-
-    // 2. Remote Fallback
-    if (batchesToCheck.length === 0) {
-      const snap = await db
+      const logsSnap = await db
         .collection("batches")
-        .orderBy("timestamp", "desc")
-        .limit(50)
+        .doc(batchId)
+        .collection("logs")
+        .orderBy("index", "desc")
+        .limit(1)
         .get();
-      if (!snap.empty) {
-        batchesToCheck = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      }
-    }
 
-    if (batchesToCheck.length === 0) return;
+      if (logsSnap.empty) continue;
+      const lastBlock = logsSnap.docs[0].data();
 
-    for (const batch of batchesToCheck) {
-      const batchId = batch.id;
-      let lastBlock = null;
-
-      if (batch.logs && batch.logs.length > 0) {
-        const sorted = [...batch.logs].sort((a, b) => a.index - b.index);
-        lastBlock = sorted[sorted.length - 1];
-      } else {
-        const logsSnap = await db
+      if (lastBlock.eventType === "RETURN_TRANSIT") {
+        const genesisSnap = await db
           .collection("batches")
           .doc(batchId)
           .collection("logs")
-          .orderBy("index", "desc")
-          .limit(1)
+          .doc("0")
           .get();
-        if (!logsSnap.empty) lastBlock = logsSnap.docs[0].data();
-      }
-
-      if (!lastBlock) continue;
-
-      if (lastBlock.eventType === "RETURN_TRANSIT") {
-        // We need Genesis block to check createdBy
-        let genesis = null;
-        if (
-          batch.logs &&
-          batch.logs[0] &&
-          batch.logs[0].eventType === "GENESIS"
-        ) {
-          genesis = batch.logs[0];
-        } else {
-          const genesisSnap = await db
-            .collection("batches")
-            .doc(batchId)
-            .collection("logs")
-            .doc("0")
-            .get();
-          if (genesisSnap.exists) genesis = genesisSnap.data();
-        }
-
-        if (genesis) {
+        if (genesisSnap.exists) {
+          const genesis = genesisSnap.data();
           const currentUserId =
             auth.currentUser?.uid || localStorage.getItem("metamask_wallet");
 
