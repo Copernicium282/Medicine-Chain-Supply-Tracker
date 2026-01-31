@@ -1,95 +1,110 @@
-## 💻 Unique Tech Stack & Implementation Logic
+# Technical Implementation Notes
 
-Beyond standard web tech, we implemented several advanced mechanisms to create a decentralized-like experience in a Web 2.0 browser environment.
+Some non-obvious stuff about how this project works.
 
-### 1. MetaMask Digital Signatures
+## MetaMask Authentication
 
-**Strategy:** We force the user to **Sign** a distinct message to prove ownership of their private key.
+We don't just "connect" the wallet—we make the user sign a message to prove they control the private key.
 
 ```javascript
-// frontend/js/auth/metamask-signup.js
-async function signupWithMetamask() {
-  const msg = "Signup request for MedChain Supply Tracker";
-  // Hex Encode (Crucial for correct personal_sign behavior)
-  const msgHex =
-    "0x" +
-    Array.from(msg)
-      .map((c) => c.charCodeAt(0).toString(16))
-      .join("");
+// Hex-encode the message (some mobile wallets need this)
+const msg = "Signup request for MedChain Supply Tracker";
+const msgHex = "0x" + Array.from(msg).map(c => c.charCodeAt(0).toString(16)).join("");
 
-  // Request signature from user's crypto wallet
-  await window.ethereum.request({
-    method: "personal_sign",
-    params: [msgHex, userWalletAddress],
-  });
-}
+await window.ethereum.request({
+  method: "personal_sign",
+  params: [msgHex, walletAddress]
+});
 ```
 
-### 2. Browser-Based "Local Node" (Self-Healing)
+The signature proves identity. No passwords stored anywhere.
 
-**Strategy:** The client simulates a node using `IndexedDB` and AES encryption to guard against server-side data corruption.
+## Self-Healing Local Node
+
+The browser keeps an encrypted backup in IndexedDB. On page load, it compares local state vs server state:
 
 ```javascript
-// frontend/assets/scripts/local-node.js
-async function performSelfHealing(db) {
-  const localBatches = await this.getAllBatches(); // Fetch encrypted local copy
-
-  localBatches.forEach(async (batch) => {
-    // Compare Local State (Trusted) vs Remote State (Untrusted)
+async performSelfHealing() {
+  const localBatches = await this.getAllBatches();
+  
+  for (const batch of localBatches) {
+    const remoteData = await fetchFromFirestore(batch.id);
+    
+    // If local says "RECALLED" but server says otherwise, server is wrong
     if (localStatus === "RECALLED" && remoteData.status !== "RECALLED") {
-      console.warn("Tampering Detected! Restoring data from Local Node...");
-      await this.restoreBatchToRemote(db, batch);
+      await this.restoreBatchToRemote(batch);
     }
-  });
+  }
 }
 ```
 
-### 3. Client-Side SHA-256 Hashing
+The local node uses AES encryption with a device-specific key, so even if someone copies the IndexedDB data, they can't read it without the key.
 
-**Strategy:** Data is verified _before_ it leaves the browser. We strictly reconstruct objects to ensure deterministic hashing (Key Order matters!).
+## Hash Verification
+
+Every block stores:
+- Its own hash (SHA-256 of `previousHash + data + timestamp`)
+- The previous block's hash
+
+To verify a chain, we re-compute each hash and check the links:
 
 ```javascript
-// frontend/assets/scripts/verification-utils.js
-const orderedData = reconstructVerificationData(block); // Ensure Key Order {a,b} == {a,b}
-
-const recomputedHash = CryptoJS.SHA256(
-  block.previousHash + JSON.stringify(orderedData) + block.timestamp
-).toString();
-
-if (block.hash !== recomputedHash) {
-  throw new Error("Tampering Detected: Hash Mismatch");
+for (let i = 1; i < blocks.length; i++) {
+  const recomputed = CryptoJS.SHA256(
+    blocks[i].previousHash + JSON.stringify(blocks[i].data) + blocks[i].timestamp
+  ).toString();
+  
+  if (blocks[i].hash !== recomputed) throw new Error("Hash mismatch");
+  if (blocks[i].previousHash !== blocks[i-1].hash) throw new Error("Chain broken");
 }
 ```
 
-### 4. Supabase "Off-Chain" Evidence Locker
+Key gotcha: JSON key order matters. We use a `reconstructVerificationData()` helper to ensure consistent ordering.
 
-**Strategy:** Ledgers shouldn't store PDFs. We upload files to Supabase and only store the **Signed URL** in the immutable log.
+## File Storage
+
+PDFs and images go to Supabase, not Firestore. We store signed URLs in the ledger:
 
 ```javascript
-// ManufacturerDashboard.js
-const { data, error } = await supabase.storage
+const { data } = await supabase.storage
   .from("certificates")
-  .upload(filePath, file);
+  .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year
 
-const { data: signedData } = await supabase.storage
-  .from("certificates")
-  .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 Year Validity
-
-const certificateURL = signedData.signedUrl; // This string goes to the Immutable Ledger
+// Only the URL goes into the immutable log
+block.data.certificateURL = data.signedUrl;
 ```
 
-### 5. Geolocation via Plus Codes
+## Location Tracking
 
-**Strategy:** We convert raw GPS coordinates (which drift) into **Open Location Codes** (Plus Codes) for human-readable, consistent location tags.
+We use Plus Codes instead of raw lat/lng because:
+- They're human-readable ("8FPH+3H Bangalore")
+- They're consistent (no floating point drift)
+- They work offline once encoded
 
 ```javascript
-// location_utils.js
-async function getDeviceLocationAsPlusCode() {
-  const position = await getCurrentPosition(); // Browser API
-  const { latitude, longitude } = position.coords;
+const code = OpenLocationCode.encode(latitude, longitude);
+// Returns something like "8FPH+3H"
+```
 
-  // Convert standard Lat/Lng to "8F29+59 New York"
-  const code = OpenLocationCode.encode(latitude, longitude);
-  return code;
+## Recall Prevention
+
+When a batch is recalled, we want to prevent any further blocks from being added—even if someone deletes the recall record from Firestore.
+
+The local node checks its own cache first:
+
+```javascript
+async function confirmDelivery() {
+  await localNode.init();
+  
+  if (await localNode.isRecalled(batchId)) {
+    // Restore the deleted recall record
+    await localNode.restoreBatchToRemote(db, cachedBatch.data);
+    alert("Batch is recalled. Cannot proceed.");
+    return;
+  }
+  
+  // ... proceed with delivery
 }
 ```
+
+This way, even if the server is compromised, the local node acts as a last line of defense.

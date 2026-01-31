@@ -1,147 +1,81 @@
-# MedChain Supply Tracker �🔗
+# MedChain Supply Tracker
 
-![Status](https://img.shields.io/badge/Status-Active-success?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
-![Blockchain](https://img.shields.io/badge/Blockchain-Hybrid-purple?style=flat-square)
-![Stack](https://img.shields.io/badge/Tech-Firebase%20%7C%20Supabase%20%7C%20Leaflet-orange?style=flat-square)
+A blockchain-inspired supply chain tracker for pharmaceuticals. Uses cryptographic linking (SHA-256) to maintain tamper-evident records from factory to pharmacy.
 
-> **A Blockchain-Inspired Supply Chain Tracker** that uses cryptographic linking to ensure pharmaceutical integrity from factory to pharmacy.
+> This isn't a real blockchain—it's blockchain *concepts* applied to a centralized stack. You get the security benefits without the gas fees.
 
----
+## What It Does
 
-## 📋 Project Overview
+- **Creates immutable audit trails** for medicine batches using hash-linked records
+- **Detects tampering** by verifying the entire chain on each lookup
+- **Tracks location** at every handover using Plus Codes
+- **Supports MetaMask login** via `personal_sign` challenges
+- **Self-heals** using a browser-based backup (IndexedDB) that can restore corrupted server data
 
-**MedChain** revolutionizes supply chain tracking by implementing **Blockchain-inspired logic** (SHA-256 Hashing, Linked Lists, Merkle-like Verification) on top of a standard cloud infrastructure.
+## Tech Stack
 
-It provides the **transparency and tamper-evidence** of a blockchain without the high gas fees or slow transaction times of a decentralized network.
+| Layer | Tech |
+|-------|------|
+| Frontend | Vanilla JS, HTML5, CSS3 |
+| Database | Firebase Firestore |
+| File Storage | Supabase |
+| Local Cache | IndexedDB + AES encryption |
+| Crypto | CryptoJS (SHA-256, AES) |
+| Maps | Leaflet.js |
+| Charts | Chart.js |
 
-> **Note:** This project demonstrates how blockchain _concepts_ can secure a centralized system.
+## How It Works
 
----
+Every action (production, shipment, delivery) creates a "block" that references the previous block's hash:
 
-## 🔥 Unique Features
-
-### 🛡️ Hybrid Cryptographic Architecture
-
-Combines the **speed** of centralized databases (Firestore) with the **security** of cryptographic hashing (`SHA-256`). I used a **Cryptographically Linked Ledger** structure where every record acts as a "block" that verifies its predecessor.
-
-### 🧠 Self-Healing Local Node
-
-A browser-based "local node" (using IndexedDB) that encrypts and backs up the chain. It acts as a watchdog: if the server data conflicts with the local trusted copy, it **automatically detects tampering** and can restore the correct state.
-
-### 🔐 MetaMask Authentication (Web3)
-
-Integrated Web3 login that uses `personal_sign` challenges. Users don't just "connect" a wallet; they prove identity via cryptographic signatures, replacing insecure passwords.
-
-### 🌍 Geospatial Tracking
-
-Visualizes the physical journey of products using Open Location Codes (Plus Codes). Each handover is stamped with precise location data, verifiable on interactive maps.
-
-### 🤚 Tamper-Evident Linking
-
-Every record (Employment, Shipment, Delivery) is hashed (SHA-256) combined with the _previous_ block's hash. Changing a single character in a past record invalidates the entire subsequent chain.
-
----
-
-## 🛠️ Core Technologies
-
-| Component    | Technology              | Description                                                         |
-| :----------- | :---------------------- | :------------------------------------------------------------------ |
-| **Frontend** | HTML5, CSS3, Vanilla JS | Lightweight, no-framework architecture for max performance.         |
-| **Database** | **Firebase Firestore**  | Scalable NoSQL cloud database storing the "Block" documents.        |
-| **Storage**  | **Supabase**            | Decentralized-style object storage for heavy assets (PDFs, Images). |
-| **Local DB** | **IndexedDB**           | In-browser persistence for the "Local Node".                        |
-| **Crypto**   | **CryptoJS**            | AES Encryption (Local Node) & SHA-256 (Ledger Linking).             |
-| **Maps**     | **Leaflet.js**          | Open-source interactive maps for supply chain visualization.        |
-| **SDKs**     | **External Libs**       | `Chart.js`, `QRCode.js`, `Google Fonts`, `Firebase/Supabase SDKs`.  |
-
----
-
-## 🏗️ Architecture & Flow
-
-We do not use mutable table rows for history. We use **Append-Only Log Entries**.
-
-**Visual Representation:**
-
-```text
-/batches/{batchId}
-    ├── status: "DELIVERED"
-    └── /logs/
-         ├── 0: { event: "GENESIS", hash: "abc...", prev: "0" }
-         ├── 1: { event: "SHIPMENT", hash: "def...", prev: "abc..." }
-         └── 2: { event: "DELIVERED", hash: "ghi...", prev: "def..." }
+```
+/batches/{batchId}/logs/
+├── 0: { event: "GENESIS", hash: "abc...", previousHash: "0" }
+├── 1: { event: "SHIPMENT", hash: "def...", previousHash: "abc..." }
+└── 2: { event: "DELIVERED", hash: "ghi...", previousHash: "def..." }
 ```
 
----
+If someone modifies block 0, the hash changes. Block 1's `previousHash` no longer matches. Chain broken. Tampering detected.
 
-## ✅ Pros & Cons
+## User Roles
 
-### Advantages
+- **Manufacturer** — Creates batches with genesis blocks, generates QR codes
+- **Distributor** — Logs shipment pickups and handovers
+- **Pharmacy** — Confirms final delivery
+- **Admin** — Runs health checks, issues recalls
 
-1.  **Instant Finality**: Immediate confirmation (milliseconds) compared to traditional blockchains.
-2.  **Resilience**: Local Node backups ensure data survival even if the central server is compromised.
-3.  **Auditability**: Full immutable history of every medicine batch is publicly verifiable.
+## The "Local Node" Thing
 
-### Disadvantages & Mitigations
+Each browser keeps an encrypted copy of batch data in IndexedDB. If the server data gets corrupted (or someone deletes records), the local node can detect the mismatch and push the correct data back.
 
-1.  **Centralization Risk**: Relies on Google Cloud.
-    - _Mitigation_: **Local Node** system ensures users retain their own copy of the data.
-2.  **Client-Side Validation**: Malicious users could theoretically modify client code.
-    - _Mitigation_: Future updates will move critical verification to **Cloud Functions** (Server-Side) or Smart Contracts.
-3.  **Scalability**: Fetching entire chains gets slower with millions of records.
-    - _Mitigation_: Implementation of **Pagination** and **Archival Nodes**.
+It's not true decentralization, but it's a decent fallback for a centralized system.
 
----
+## Known Limitations
 
-## 🔮 Future Roadmap
+1. **Centralized infrastructure** — Still depends on Firebase/Google Cloud
+2. **Client-side validation** — Sophisticated attackers could bypass checks (future: move to Cloud Functions)
+3. **Scale** — Fetching full chains gets slow with millions of records
 
-- [x] **Phase 1: Hardening** (Current) - Basic Logic, Local Node, Geolocation.
-- [ ] **Phase 2: Decentralization** - Migrate Verification Logic to Solidity (Polygon Network).
-- [ ] **Phase 3: IPFS** - Move file storage from Supabase to IPFS for uncensorable storage.
+## Running Locally
 
----
+```bash
+git clone https://github.com/yourusername/Medicine-Chain-Supply-Tracker.git
+cd Medicine-Chain-Supply-Tracker/frontend
+# Open index.html with VS Code Live Server or any static server
+```
 
-## 💻 Unique Tech Stack & Implementation Logic
+No npm, no build step. It's vanilla JS.
 
-Beyond standard web tech, I implemented advanced mechanisms like **MetaMask Signals**, **Self-Healing Local Nodes**, and **Client-Side Hashing**.
+## Future Plans
 
-> 📘 **Developers:** For detailed implementation logic and code snippets, please see the [Technical Architecture Wiki](WIKI.md).
+- Move verification logic to Solidity (Polygon)
+- Migrate file storage to IPFS
+- Add server-side validation via Cloud Functions
 
----
+## Technical Deep Dive
 
-## 👥 Role-Based Workflows
-
-The system enforces strict **Role-Based Access Control (RBAC)**.
-
-1.  **🏭 Manufacturer**: Mints the **Genesis Block**. Generates specific QR codes, uploads production certificates.
-2.  **🚚 Distributor**: Scans QR to pickup. Logs handover location and time. Validates "Time Travel" (cannot pickup before production).
-3.  **🏥 Pharmacy**: Final scan. Verifies expiry dates and integrity. Confirms "Reception Block".
-4.  **🛡️ Admin**: Network oversight. Runs health checks to find broken chains. Can force **Global Recalls**.
+See [WIKI.md](WIKI.md) for implementation details on MetaMask signatures, the self-healing mechanism, and hash verification.
 
 ---
 
-## 📦 Installation
-
-1.  **Clone the Repository**
-    ```bash
-    git clone https://github.com/yourusername/Medicine-Chain-Supply-Tracker.git
-    ```
-2.  **Run Locally**
-    - Open `index.html` in a Live Server (VS Code Extension).
-    - No `npm install` or build steps required! (Pure Vanilla JS).
-
----
-
-## 🌟 Credits & Acknowledgments
-
-### Tools & APIs
-
-- **Firebase Firestore**: For the scalable, real-time database.
-- **Supabase Storage**: For securely hosting evidence files off-chain.
-- **Leaflet.js**: For the interactive, privacy-friendly maps.
-- **Google Open Location Codes**: For the immutable "Plus Code" geolocation system.
-- **Chart.js**: For the real-time analytics visualization.
-
-### Special Thanks
-
-- **Antigravity (AI Assistant)**: Served as the primary **CSS-Helper and Debugger**, fixing layout issues and resolving complex JavaScript logic errors during development. 🤖✨
+MIT License
