@@ -1,5 +1,7 @@
 # MedChain Supply Tracker
 
+https://copernicium282.github.io/Medicine-Chain-Supply-Tracker/
+
 A blockchain-inspired supply chain tracker for pharmaceuticals. Uses cryptographic linking (SHA-256) to maintain tamper-evident records from factory to pharmacy.
 
 > This isn't a real blockchain—it's blockchain *concepts* applied to a centralized stack. You get the security benefits without the gas fees.
